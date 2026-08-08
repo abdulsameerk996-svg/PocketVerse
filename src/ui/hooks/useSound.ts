@@ -3,11 +3,11 @@ import { getSettings } from '@/core/state/settingsStore';
 /**
  * Sound hooks.
  *
- * The game ships without audio binaries (see `docs/ASSETS.md`), but every place
- * that *should* make a noise already calls through this façade with a stable
- * cue name. Dropping files into `assets/audio/<cue>.m4a` and implementing
- * `loadCue` below turns the whole app audible without touching a single call
- * site — that is the entire point of routing it here now.
+ * The game ships without audio binaries (see `docs/ASSETS.md`). Every place
+ * that *should* make a noise calls through this façade with a stable cue name,
+ * and the platform backends (web: WebAudio synthesis; native: runtime WAV
+ * synthesis via expo-audio) register a sink here at boot — so no call site
+ * ever touches audio internals.
  */
 
 export type SoundCue =
@@ -34,7 +34,7 @@ type Sink = (cue: SoundCue, opts?: { volume?: number; rate?: number }) => void;
 
 let sink: Sink | null = null;
 
-/** Wire a real audio backend at boot once assets exist. */
+/** Wire a real audio backend at boot. */
 export function setSoundSink(next: Sink | null) {
   sink = next;
 }

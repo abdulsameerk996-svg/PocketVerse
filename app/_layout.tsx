@@ -16,8 +16,8 @@ import { BootScreen } from '@/ui/components/BootScreen';
 
 // Games must be registered before anything reads the registry (catalog, saves).
 installGames();
-// Registers the sound sink. Audible on web (synthesised), still silent on
-// native until audio assets land — see docs/ASSETS.md.
+// Registers the sound sink. Both platforms synthesise every cue at runtime
+// (web: WebAudio, native: expo-audio WAV synthesis) — see docs/ASSETS.md.
 installSound();
 
 /*

@@ -32,8 +32,9 @@ Nothing else needs to change: no game reads a glyph directly from another game.
 
 ## Audio
 
-Sound is wired but silent. Every place that *should* make a noise already calls
-through the façade in `src/ui/hooks/useSound.ts` with a stable cue name:
+Sound is wired and audible on both platforms — still with **no audio binaries
+in the repository**. Every place that *should* make a noise calls through the
+façade in `src/ui/hooks/useSound.ts` with a stable cue name:
 
 ```ts
 play('game.collect');
@@ -41,46 +42,40 @@ play('reward.levelup');
 play('rhythm.perfect');
 ```
 
-The façade checks the user's Sound setting and forwards to a **sink**, which is
-currently unset. To make the whole app audible:
+The façade checks the user's Sound setting and forwards to a **sink** registered
+once at boot by the platform backend:
 
-1. Drop files into `assets/audio/<cue>.m4a` using the cue names in `SoundCue`.
-2. Install `expo-audio`.
-3. Implement and register a sink once at boot:
+- **Web** — `soundBackend.web.ts` synthesises each cue live with the browser's
+  WebAudio (`AudioContext`, a couple of oscillators + a noise burst). Nothing is
+  downloaded; the context starts on the first gesture.
+- **Native** — `soundBackend.ts` renders each cue to a small 16-bit PCM WAV with
+  the *same* voice math (`src/ui/hooks/synthWav.ts`), writes it to the app cache
+  on first use, and plays it through `expo-audio`.
+
+Both backends read the single voice table in `src/ui/hooks/soundVoices.ts`, so
+platforms cannot drift. `npm run sim:audio` renders every cue in Node and checks
+the WAV structure, amplitude, duration and determinism.
+
+### Replacing with real recordings
+
+The generated cues are deliberately small and game-y. To use real recordings
+instead, drop files into `assets/audio/<cue>.m4a` using the cue names in
+`SoundCue`, then in `soundBackend.ts` swap the synthesis step for the packaged
+asset:
 
 ```ts
 // src/ui/hooks/soundBackend.ts
 import { createAudioPlayer } from 'expo-audio';
-import { setSoundSink, type SoundCue } from './useSound';
 
-const CUES: Partial<Record<SoundCue, number>> = {
-  'game.collect': require('../../../assets/audio/game.collect.m4a'),
-  'reward.levelup': require('../../../assets/audio/reward.levelup.m4a'),
-  // …
-};
-
-const players = new Map<SoundCue, ReturnType<typeof createAudioPlayer>>();
-
-export function installSound() {
-  setSoundSink((cue, opts) => {
-    const source = CUES[cue];
-    if (!source) return;
-    let p = players.get(cue);
-    if (!p) {
-      p = createAudioPlayer(source);
-      players.set(cue, p);
-    }
-    p.volume = opts?.volume ?? 1;
-    p.seekTo(0);
-    p.play();
-  });
-}
+const source = require('../../../assets/audio/game.collect.m4a');
+const player = createAudioPlayer(source);
+player.volume = opts?.volume ?? 1;
+player.seekTo(0).then(() => player.play());
 ```
 
-Then call `installSound()` next to `installGames()` in `app/_layout.tsx`.
-
-**No call site changes.** Every `play(...)` in the ten games starts working at
-once — which is the entire reason the cues were written before the audio existed.
+**No call site changes** either way — every `play(...)` in the games goes
+through the same sink, which is the entire reason the cues were written before
+the audio existed.
 
 ### Cue inventory
 
