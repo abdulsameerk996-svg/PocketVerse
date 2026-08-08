@@ -17,6 +17,7 @@ import { sumoModule } from './sumo';
 import { tankDuelModule } from './tankduel';
 import { colorClashModule } from './colorclash';
 import { dodgeDuelModule } from './dodgeduel';
+import { frontierModule } from './frontier';
 
 /**
  * ============================================================================
@@ -28,6 +29,9 @@ import { dodgeDuelModule } from './dodgeduel';
  * simulation, save hydration, the router — discovers it from the registry.
  */
 export const GAME_MODULES = [
+  // FLAGSHIP — the big game
+  frontierModule,
+
   petModule,
   runnerModule,
   drivingModule,

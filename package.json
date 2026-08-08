@@ -15,6 +15,7 @@
     "sim:penfight": "tsc -p tools/penfight-sim && node tools/penfight-sim/harness.js",
     "sim:audio": "tsc -p tools/audio-sim && node tools/audio-sim/harness.js",
     "sim:sprite": "tsc -p tools/sprite-sim && node tools/sprite-sim/harness.js",
+    "sim:frontier": "tsc -p tools/frontier-sim && node tools/frontier-sim/harness.js",
     "lint": "expo lint",
     "doctor": "npx expo-doctor"
   },

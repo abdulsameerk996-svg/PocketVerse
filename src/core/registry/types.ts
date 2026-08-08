@@ -83,11 +83,12 @@ export type GameMeta = {
   players?: 1 | 2;
 };
 
-export type GameCategory = 'arcade' | 'versus';
+export type GameCategory = 'arcade' | 'versus' | 'adventure';
 
 export const CATEGORY_LABEL: Record<GameCategory, string> = {
   arcade: 'ARCADE',
   versus: '2 PLAYER',
+  adventure: 'ADVENTURE',
 };
 
 export type GameModule = {

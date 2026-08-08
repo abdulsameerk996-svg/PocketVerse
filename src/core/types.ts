@@ -31,7 +31,9 @@ export type GameId =
   | 'sumo'
   | 'tankduel'
   | 'colorclash'
-  | 'dodgeduel';
+  | 'dodgeduel'
+  // flagship adventure
+  | 'frontier';
 
 /* ------------------------------------------------------------------ */
 /* Currency & rewards                                                  */
@@ -291,7 +293,14 @@ export type MetricKey =
   // "win 2 two-player matches" without naming a game
   | 'versus_matches'
   | 'versus_wins'
-  | 'versus_rounds';
+  | 'versus_rounds'
+  // frontier
+  | 'frontier_kills'
+  | 'frontier_bosses'
+  | 'frontier_elites'
+  | 'frontier_landmarks'
+  | 'frontier_time'
+  | 'frontier_runs';
 
 export type MetricDelta = Partial<Record<MetricKey, number>>;
 
@@ -302,6 +311,7 @@ export const METRIC_MODE: Partial<Record<MetricKey, 'sum' | 'max'>> = {
   max_combo: 'max',
   fish_species: 'max',
   games_distinct_played: 'max',
+  frontier_time: 'max',
 };
 
 /* ------------------------------------------------------------------ */

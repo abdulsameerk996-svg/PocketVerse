@@ -118,11 +118,11 @@ check('unknown item falls back', validateSprite(unknown) === null, `${unknown.sh
 
 /* ------------------------------------------------------------- games -- */
 
-console.log('\nGames (16)');
+console.log('\nGames (17)');
 const GAMES = [
   'pet', 'runner', 'driving', 'puzzle', 'zombie', 'farm', 'fishing',
   'platformer', 'rhythm', 'arcade', 'penfight', 'airhockey', 'sumo',
-  'tankduel', 'colorclash', 'dodgeduel',
+  'tankduel', 'colorclash', 'dodgeduel', 'frontier',
 ];
 for (const id of GAMES) {
   const sprite = spriteForGame(id, '#7C5CFF', id);

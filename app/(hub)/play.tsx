@@ -31,6 +31,7 @@ type Filter = (typeof FILTERS)[number];
 
 /** Section order in the launcher. Anything without a category is arcade. */
 const SECTIONS: { id: GameCategory; label: string; blurb: string }[] = [
+  { id: 'adventure', label: 'ADVENTURE', blurb: 'The flagship — explore, fight, survive' },
   { id: 'arcade', label: 'ARCADE', blurb: 'Solo runs, scores and streaks' },
   { id: 'versus', label: '2 PLAYER', blurb: 'Same device, same keyboard, no mercy' },
 ];
@@ -63,6 +64,8 @@ export default function PlayScreen() {
     if (filter === 'all') return games;
     return games.filter((g) => g.meta.tags.includes(filter));
   }, [filter, games]);
+
+  const flagship = useMemo(() => visible.find((g) => g.meta.category === 'adventure'), [visible]);
 
   /**
    * Grouped into launcher sections. Nothing here knows which games exist — a
@@ -115,6 +118,50 @@ export default function PlayScreen() {
             </PressableScale>
           ))}
         </ScrollView>
+
+        {flagship ? (
+          <PressableScale
+            onPress={() => router.push(`/game/${flagship.id}`)}
+            scaleTo={0.975}
+            haptic="select"
+            style={styles.heroWrap}
+          >
+            <LinearGradient
+              colors={['#16337F', '#2E7BD6', '#0B0F22']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <Shimmer width={width} duration={3200} />
+            <View style={styles.heroRow}>
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text variant="micro" color="#A9E7FF">
+                  FEATURED · NEW
+                </Text>
+                <Text variant="title" numberOfLines={1}>
+                  {flagship.meta.title}
+                </Text>
+                <Text variant="caption" color="rgba(233,244,255,0.82)" numberOfLines={2}>
+                  {flagship.meta.tagline}
+                </Text>
+                <Text variant="micro" color="#A9E7FF" style={{ marginTop: spacing.xs }}>
+                  {flagship.meta.energyCost} ⚡ per run
+                  {bests[flagship.id] ? ` · best ${Math.round(bests[flagship.id])}` : ''}
+                </Text>
+              </View>
+              <SpriteView
+                sprite={spriteForGame(flagship.id, '#A9E7FF', flagship.meta.title)}
+                size={66}
+                label={flagship.meta.title}
+              />
+            </View>
+            <View style={styles.heroCta}>
+              <Text variant="label" color="#07111F">
+                ▶ PLAY
+              </Text>
+            </View>
+          </PressableScale>
+        ) : null}
 
         {sections.map((section) => (
           <View key={section.id} style={{ gap: spacing.md }}>
@@ -205,9 +252,8 @@ function GameCard({
 }) {
   const entrance = useEntrance(index);
   // "Air Hockey · 2 Players" — the line the launcher brief asked for.
-  const subtitle = `${category === 'versus' ? '2 Player' : 'Arcade'} · ${
-    players === 2 ? '2 Players' : '1 Player'
-  }`;
+  const sectionLabel = category === 'versus' ? '2 Player' : category === 'adventure' ? 'Adventure' : 'Arcade';
+  const subtitle = `${sectionLabel} · ${players === 2 ? '2 Players' : '1 Player'}`;
 
   return (
     <Animated.View style={entrance}>
@@ -277,6 +323,29 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
     borderColor: palette.hairline,
+  },
+  heroWrap: {
+    minHeight: 168,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(169,231,255,0.35)',
+    overflow: 'hidden',
+    padding: spacing.lg,
+    justifyContent: 'space-between',
+    shadowColor: '#2E7BD6',
+    shadowOpacity: 0.35,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
+  },
+  heroRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+  heroCta: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(233,244,255,0.92)',
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   card: {
