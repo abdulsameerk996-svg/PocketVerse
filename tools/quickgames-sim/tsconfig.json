@@ -19,6 +19,12 @@
     "../../src/games/colorsnap/logic.ts",
     "../../src/games/survive60/logic.ts",
     "../../src/games/hookrun/logic.ts",
-    "../../src/games/towerdef/logic.ts"
+    "../../src/games/towerdef/logic.ts",
+    "../../src/games/dodgerain/logic.ts",
+    "../../src/games/onetap/logic.ts",
+    "../../src/games/nummerge/logic.ts",
+    "../../src/games/lasersurvive/logic.ts",
+    "../../src/games/memrush/logic.ts",
+    "../../src/games/orbitguard/logic.ts"
   ]
 }

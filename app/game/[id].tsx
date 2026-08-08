@@ -19,15 +19,18 @@ import {
   AvatarView,
   Button,
   Card,
+  ErrorBoundary,
   PauseSheet,
   PressableScale,
   ResultsSheet,
+  SpriteView,
   Text,
   gradients,
   haptics,
   palette,
   radius,
   spacing,
+  spriteForGame,
   useResponsive,
 } from '@/ui';
 
@@ -184,7 +187,11 @@ export default function GameHost() {
           </View>
 
           <View style={styles.gateBody}>
-            <Text size={sc(72)}>{module.meta.glyph}</Text>
+            <SpriteView
+              sprite={spriteForGame(module.id, accent, module.meta.title)}
+              size={sc(72)}
+              label={module.meta.title}
+            />
             <Text variant="display" center>
               {module.meta.title}
             </Text>
@@ -258,18 +265,20 @@ export default function GameHost() {
 
       {stage !== 'gate' ? (
         <View style={styles.surface}>
-          <Surface
-            key={runKey}
-            onFinish={handleFinish}
-            track={handleTrack}
-            grant={handleGrant}
-            modifiers={modifiers}
-            paused={paused || stage === 'results'}
-            requestPause={() => setPaused(true)}
-            level={player.level}
-            save={saves[module.id] ?? module.defaultSave?.() ?? {}}
-            setSave={handleSetSave}
-          />
+          <ErrorBoundary label={module.meta.title} onRetry={begin} onBack={exit}>
+            <Surface
+              key={runKey}
+              onFinish={handleFinish}
+              track={handleTrack}
+              grant={handleGrant}
+              modifiers={modifiers}
+              paused={paused || stage === 'results'}
+              requestPause={() => setPaused(true)}
+              level={player.level}
+              save={saves[module.id] ?? module.defaultSave?.() ?? {}}
+              setSave={handleSetSave}
+            />
+          </ErrorBoundary>
         </View>
       ) : null}
 

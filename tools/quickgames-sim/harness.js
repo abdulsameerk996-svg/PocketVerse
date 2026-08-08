@@ -10,6 +10,12 @@ const SNAP = require('./build/games/colorsnap/logic.js');
 const S60 = require('./build/games/survive60/logic.js');
 const HOOK = require('./build/games/hookrun/logic.js');
 const TD = require('./build/games/towerdef/logic.js');
+const RAIN = require('./build/games/dodgerain/logic.js');
+const FLY = require('./build/games/onetap/logic.js');
+const MERGE = require('./build/games/nummerge/logic.js');
+const LASER = require('./build/games/lasersurvive/logic.js');
+const MEM = require('./build/games/memrush/logic.js');
+const ORBIT = require('./build/games/orbitguard/logic.js');
 const Q = require('./build/core/game/quick.js');
 const { createRng } = require('./build/core/utils/rng.js');
 
@@ -249,6 +255,239 @@ console.log('\nTower Defense');
     guard6++;
   }
   check('a defenseless run eventually loses', g6.phase === 'over', `phase=${g6.phase} lives=${g6.lives}`);
+}
+
+/* ------------------------------------------------------------- DODGE RAIN */
+console.log('\nDodge Rain');
+{
+  const s = RAIN.makeRain();
+  check('rain state is finite and pooled', s.drops.length === RAIN.DROP_POOL && fin(s.time) && s.lives === 3);
+  check('storm thickens: interval falls, speed rises', RAIN.dropInterval(30) < RAIN.dropInterval(0) && RAIN.dropSpeed(30) > RAIN.dropSpeed(0));
+  check('speed never exceeds its cap', RAIN.dropSpeed(99999) <= 1.05);
+
+  // Deterministic spawns: two seeded runs drop the same lanes.
+  const a = RAIN.makeRain();
+  const b = RAIN.makeRain();
+  const ra = createRng(7);
+  const rb = createRng(7);
+  for (let i = 0; i < 600; i++) {
+    RAIN.stepRain(a, ra, 1 / 60, 0.5);
+    RAIN.stepRain(b, rb, 1 / 60, 0.5);
+  }
+  check('seeded storm is deterministic', a.drops.map((d) => (d.active ? d.x : -1)).join(',') === b.drops.map((d) => (d.active ? d.x : -1)).join(','));
+  check('no NaN after 10 s', fin(a.time) && fin(a.score) && a.drops.every((d) => fin(d.x) && fin(d.y)));
+
+  // A drop dead-centre above the player always hits.
+  const h = RAIN.makeRain();
+  h.drops[0].active = true;
+  h.drops[0].x = 0.5;
+  h.drops[0].y = 0.02;
+  h.drops[0].speed = 0.5;
+  let hits = 0;
+  for (let i = 0; i < 200 && !h.over; i++) hits += RAIN.stepRain(h, Math.random, 1 / 60, 0.5);
+  check('a centred drop hits the centred player', hits === 1 && h.lives === 2, `lives=${h.lives}`);
+  check('three hits end the run', h.over === false); // only one hit landed
+
+  // Off-lane drops are dodged, never hit.
+  const d = RAIN.makeRain();
+  d.drops[0].active = true;
+  d.drops[0].x = 0.05;
+  d.drops[0].y = 0.02;
+  d.drops[0].speed = 0.6;
+  for (let i = 0; i < 200; i++) RAIN.stepRain(d, Math.random, 1 / 60, 0.5);
+  check('off-lane drops are dodges, not hits', d.lives === 3 && d.dodges >= 1, `dodges=${d.dodges}`);
+}
+
+/* ------------------------------------------------------------- ONE-TAP FLIGHT */
+console.log('\nOne-Tap Flight');
+{
+  const s = FLY.makeFlight();
+  const y0 = s.y;
+  FLY.stepFlight(s, Math.random, 1 / 60, true);
+  check('a flap pushes the bird up', s.y < y0);
+  const g = FLY.makeFlight();
+  g.y = 0.3;
+  g.vy = 0;
+  FLY.stepFlight(g, Math.random, 1 / 60, false);
+  check('gravity pulls the bird down', g.y > 0.3);
+  check('gap shrinks with time, never below the floor', FLY.gapHeight(200) < FLY.gapHeight(0) && FLY.gapHeight(999) === FLY.MIN_GAP);
+  check('pipes accelerate, capped', FLY.pipeSpeed(999) <= 0.34 && FLY.pipeSpeed(60) > FLY.pipeSpeed(0));
+
+  const p = FLY.makeFlight();
+  const rng = createRng(11);
+  FLY.spawnPipe(p, rng);
+  const pipe = p.pipes.find((x) => x.active);
+  check('spawned pipe starts off the right edge with an in-bounds gap', pipe && pipe.x === 1.02 && pipe.gapY >= 0 && pipe.gapY + pipe.gapH <= 1);
+
+  // Pass counting: a pipe fully behind the bird clears cleanly.
+  const c = FLY.makeFlight();
+  c.y = 0.5;
+  c.pipes[0].active = true;
+  c.pipes[0].x = -0.1;
+  c.pipes[0].gapY = 0.4;
+  c.pipes[0].gapH = 0.3;
+  FLY.stepFlight(c, Math.random, 1 / 60, false);
+  check('cleared pipe increments passes', c.passes === 1);
+
+  // A misaligned gap ends the run.
+  const x = FLY.makeFlight();
+  x.y = 0.5;
+  x.pipes[0].active = true;
+  x.pipes[0].x = 0.0;
+  x.pipes[0].gapY = 0.9;
+  x.pipes[0].gapH = 0.05;
+  FLY.stepFlight(x, Math.random, 1 / 60, false);
+  check('blocked gap ends the run', x.over === true);
+
+  // Determinism + finiteness over a long seeded run.
+  const a = FLY.makeFlight();
+  const b = FLY.makeFlight();
+  const ra = createRng(3);
+  const rb = createRng(3);
+  for (let i = 0; i < 900 && !a.over && !b.over; i++) {
+    FLY.stepFlight(a, ra, 1 / 60, i % 37 === 0);
+    FLY.stepFlight(b, rb, 1 / 60, i % 37 === 0);
+  }
+  check('seeded flight is deterministic', a.passes === b.passes && a.over === b.over && fin(a.y) && fin(a.vy));
+}
+
+/* ------------------------------------------------------------- NUMBER MERGE */
+console.log('\nNumber Merge');
+{
+  const s1 = MERGE.slideRow([2, 2, 0, 0]);
+  check('pair merges once', JSON.stringify(s1.row) === JSON.stringify([4, 0, 0, 0]) && s1.gained === 4);
+  const s2 = MERGE.slideRow([2, 2, 2, 2]);
+  check('four equal tiles fuse into two', JSON.stringify(s2.row) === JSON.stringify([4, 4, 0, 0]) && s2.gained === 8);
+  const s3 = MERGE.slideRow([2, 0, 2, 4]);
+  check('non-adjacent pair fuses after sliding', JSON.stringify(s3.row) === JSON.stringify([4, 4, 0, 0]));
+
+  const board = [0, 0, 0, 2, 0, 2, 0, 0, 0];
+  const right = MERGE.moveGrid(board, 2);
+  check('right slide moves and fuses', JSON.stringify(right.grid) === JSON.stringify([0, 0, 0, 0, 0, 4, 0, 0, 0]) && right.moved);
+  const upBoard = [2, 0, 0, 2, 0, 0, 0, 0, 0];
+  const up = MERGE.moveGrid(upBoard, 1);
+  check('up slide fuses the column', JSON.stringify(up.grid) === JSON.stringify([4, 0, 0, 0, 0, 0, 0, 0, 0]) && up.moved);
+  check('dead move reports moved=false', MERGE.moveGrid([2, 4, 2, 4, 2, 4, 2, 4, 2], 0).moved === false);
+
+  const r1 = createRng(5);
+  const r2 = createRng(5);
+  const ga = MERGE.makeMerge();
+  const gb = MERGE.makeMerge();
+  ga.grid = [0, 0, 0, 0, 2, 0, 0, 0, 0];
+  gb.grid = [0, 0, 0, 0, 2, 0, 0, 0, 0];
+  for (let i = 0; i < 30; i++) {
+    MERGE.applyMove(ga, i % 4, r1);
+    MERGE.applyMove(gb, i % 4, r2);
+  }
+  check('seeded merge game is deterministic', JSON.stringify(ga.grid) === JSON.stringify(gb.grid) && ga.score === gb.score);
+  check('no NaN after 30 moves', ga.grid.every((v) => fin(v)) && fin(ga.score));
+  const fresh = MERGE.makeMerge();
+  check('makeMerge seeds two tiles', fresh.grid.filter((v) => v > 0).length === 2);
+
+  // Full board with no merges is game over.
+  const full = MERGE.makeMerge();
+  full.grid = [2, 4, 2, 4, 2, 4, 2, 4, 2];
+  check('canMove false on a locked board', MERGE.canMove(full.grid) === false);
+  const res = MERGE.applyMove(full, 0, Math.random);
+  check('locked board ends the run', res.over === true);
+}
+
+/* ------------------------------------------------------------- LASER SURVIVE */
+console.log('\nLaser Survive');
+{
+  check('beam count grows on a fixed schedule', LASER.beamCount(0) === 2 && LASER.beamCount(25) === 3 && LASER.beamCount(50) === 4 && LASER.beamCount(999) === 4);
+  check('beam speed escalates, capped', LASER.beamSpeed(999) <= 2.4 && LASER.beamSpeed(60) > LASER.beamSpeed(0));
+
+  const onLine = LASER.distToBeam(0.3, 0.5, 0);
+  const offLine = LASER.distToBeam(0.5, 0.65, 0);
+  check('distance to beam is zero on the line', onLine < 1e-9);
+  check('off-line points are farther', offLine > 0.1);
+
+  const a = LASER.makeLasers();
+  const b = LASER.makeLasers();
+  for (let i = 0; i < 600; i++) {
+    LASER.stepLasers(a, 1 / 60, 0.5, 0.3, 0);
+    LASER.stepLasers(b, 1 / 60, 0.5, 0.3, 0);
+  }
+  check('beams rotate deterministically', a.beams[0].angle === b.beams[0].angle && a.time === b.time);
+  check('no NaN after 10 s of beams', a.beams.every((x) => fin(x.angle)) && fin(a.score) && fin(a.time));
+  // Moving diagonally across a beam line counts as a close call.
+  const dg = LASER.makeLasers();
+  dg.beams[0].active = true;
+  dg.beams[0].angle = 0; // horizontal line through the centre at y=0.5
+  dg.prevX = 0.3;
+  dg.prevY = 0.4;
+  const before = dg.dodges;
+  LASER.stepLasers(dg, 1 / 60, 0.7, 0.6, 0);
+  // Both starting beams are active by t=0, so a diagonal dash crosses at least
+  // one line and never touches the player (hp stays full).
+  check('crossing a beam line counts as a dodge', dg.dodges >= before + 1 && dg.hp === 3, `dodges=${dg.dodges}`);
+
+  // Park the player on a beam line: hits land, three end the run.
+  const h = LASER.makeLasers();
+  h.beams[0].active = true;
+  h.beams[0].angle = 0;
+  let tot = 0;
+  for (let i = 0; i < 400 && !h.over; i++) tot += LASER.stepLasers(h, 1 / 60, 0.5, 0.5, 0);
+  check('parked on the beam costs all three hearts', h.over === true && tot >= 3, `hp=${h.hp} hits=${tot}`);
+}
+
+/* ------------------------------------------------------------- MEMORY RUSH */
+console.log('\nMemory Rush');
+{
+  const r1 = createRng(9);
+  const r2 = createRng(9);
+  let s1 = [];
+  let s2 = [];
+  for (let i = 0; i < 20; i++) {
+    s1 = MEM.extendSeq(s1, r1);
+    s2 = MEM.extendSeq(s2, r2);
+  }
+  check('extendSeq is deterministic', JSON.stringify(s1) === JSON.stringify(s2));
+  check('extendSeq only ever appends valid pads', s1.length === 20 && s1.every((p) => p >= 0 && p < MEM.PADS));
+  check('checkEntry verdicts', MEM.checkEntry([1, 2, 3], 0) === 'ok' && MEM.checkEntry([1, 2, 3], 2) === 'done' && MEM.checkEntry([1, 2, 3], 3) === 'wrong' && MEM.checkEntry([1, 2, 3], -1) === 'wrong');
+  check('timing curves tighten with stage', MEM.padTimer(6) < MEM.padTimer(1) && MEM.showPadMs(6) < MEM.showPadMs(1));
+  check('stage score is positive and grows', MEM.stageScore(3, 3) > MEM.stageScore(1, 3));
+  const norm = MEM.normalizeMemSave({ runs: -2, best: 'x', bestStreak: 12 });
+  check('save normalisation clamps garbage', norm.runs === 0 && norm.best === 0 && norm.bestStreak === 12);
+}
+
+/* ------------------------------------------------------------- ORBIT GUARD */
+console.log('\nOrbit Guard');
+{
+  check('angleDiff wraps into [-π, π]', Math.abs(ORBIT.angleDiff(6.0, 0.1)) < Math.PI && Math.abs(ORBIT.angleDiff(-6.0, 0.1)) < Math.PI && ORBIT.angleDiff(0, 0) === 0);
+
+  const a = ORBIT.makeOrbit();
+  const b = ORBIT.makeOrbit();
+  const ra = createRng(13);
+  const rb = createRng(13);
+  for (let i = 0; i < 900 && !a.over && !b.over; i++) {
+    ORBIT.stepOrbit(a, ra, 1 / 60, Math.sin(i * 0.05) * 2);
+    ORBIT.stepOrbit(b, rb, 1 / 60, Math.sin(i * 0.05) * 2);
+  }
+  check('seeded orbit run is deterministic', a.blocks === b.blocks && a.hp === b.hp && a.over === b.over);
+  check('no NaN in a 15 s orbit run', a.orbs.every((o) => fin(o.dist) && fin(o.angle)) && fin(a.score));
+  check('a swinging shield deflects some orbs', a.blocks > 0, `blocks=${a.blocks}`);
+
+  // A parked shield covering its half of the ring blocks everything aligned.
+  const d = ORBIT.makeOrbit();
+  d.orbs[0].active = true;
+  d.orbs[0].angle = 0;
+  d.orbs[0].dist = 0.4;
+  d.orbs[0].speed = 0.1;
+  ORBIT.stepOrbit(d, Math.random, 1 / 60, 0);
+  check('orb inside the shield arc is deflected', d.orbs[0].active === false && d.blocks === 1);
+
+  // An orb aimed away from the shield reaches the core.
+  const h = ORBIT.makeOrbit();
+  h.orbs[0].active = true;
+  h.orbs[0].angle = Math.PI; // opposite the shield at 0
+  h.orbs[0].dist = 0.4;
+  h.orbs[0].speed = 0.5;
+  let hits = 0;
+  for (let i = 0; i < 200 && !h.over; i++) hits += ORBIT.stepOrbit(h, Math.random, 1 / 60, 0);
+  check('shielded-away orb hits the core', hits === 1 && h.hp === 2, `hp=${h.hp}`);
+  check('three core hits end the run', h.over === false);
 }
 
 /* ------------------------------------------------------ SHARED QUICK HELPERS */

@@ -17,3 +17,4 @@ export * from './ToggleRow';
 export * from './ModalHeader';
 export * from './HubTabBar';
 export * from './BootScreen';
+export * from './ErrorBoundary';

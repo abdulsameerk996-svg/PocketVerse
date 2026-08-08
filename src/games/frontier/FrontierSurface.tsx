@@ -4,7 +4,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { HAS_KEYBOARD } from '@/core/game3d';
-import { Text, haptics, palette, play, radius, spacing } from '@/ui';
+import { Button, Text, haptics, palette, play, radius, spacing } from '@/ui';
 import { BIOMES, BOSSES, UPGRADE_MAP, normalizeFrontierSave } from './content';
 import { applyUpgrade, createRun, finishRun } from './sim';
 import { FrontierScene, type CamDiag } from './Scene';
@@ -80,17 +80,34 @@ export default function FrontierSurface({
     [],
   );
 
+  // World creation is a one-shot per run. A failed seed must surface as a
+  // readable error screen instead of a blank canvas; `attempt` rebuilds it.
+  const [attempt, setAttempt] = useState(0);
+  const world = useMemo(() => {
+    try {
+      return createRun(seed, normalizeFrontierSave(save), mods);
+    } catch (e) {
+      console.error('[frontier] world creation failed:', e);
+      return null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed, attempt]);
+
   const worldRef = useRef<World | null>(null);
-  if (worldRef.current === null) {
-    worldRef.current = createRun(seed, normalizeFrontierSave(save), mods);
-  }
-  const world = worldRef.current;
+  if (world && worldRef.current === null) worldRef.current = world;
 
   const input = useRef<FrontierInput>({ mx: 0, mz: 0, sprint: false, melee: false, dash: false, ability: false });
   // Dev-only: filled by the scene's frame loop for the renderer diagnostic.
   const camDiag = useRef<CamDiag>({ x: 0, y: 0, z: 0 });
 
-  const [hud, setHud] = useState<Hud>(() => snapshot(world));
+  const [hud, setHud] = useState<Hud>(() => (world ? snapshot(world) : emptyHud()));
+  // The scene mounts immediately so R3F can warm up behind the flash; the
+  // overlay guarantees the player never sees a half-initialised world.
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setReady(true), 380);
+    return () => clearTimeout(t);
+  }, []);
   const [finishing, setFinishing] = useState(false);
   const finished = useRef(false);
 
@@ -298,9 +315,39 @@ export default function FrontierSurface({
 
   const showTouch = !HAS_KEYBOARD;
 
+  if (!world) {
+    return (
+      <View style={styles.root}>
+        <View style={styles.errorCard}>
+          <Text variant="micro" color={palette.coral} center>
+            FRONTIER · INIT ERROR
+          </Text>
+          <Text variant="heading" center style={{ marginTop: spacing.xs }}>
+            The frontier could not load
+          </Text>
+          <Text variant="caption" muted center style={{ marginTop: spacing.sm }}>
+            World generation hit an error. Retry — your frontier save is safe.
+          </Text>
+          <Button label="Try again" onPress={() => setAttempt((a) => a + 1)} full style={{ marginTop: spacing.lg }} />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.root}>
       <FrontierScene world={worldRef} input={input} paused={paused} seed={seed} onOver={endRun} camDiag={camDiag} />
+
+      {!ready ? (
+        <View pointerEvents="none" style={styles.loadingOverlay}>
+          <Text variant="heading" color={palette.mint}>
+            FRONTIER
+          </Text>
+          <Text variant="caption" muted style={{ marginTop: spacing.xs }}>
+            Loading world…
+          </Text>
+        </View>
+      ) : null}
 
       {/* ------------------------------------------------------------ HUD -- */}
       <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
@@ -462,6 +509,36 @@ function DevDiagnostics({
 }
 
 /* ============================================================== readouts == */
+
+function emptyHud(): Hud {
+  return {
+    time: 0,
+    hp: 0,
+    maxHp: 1,
+    level: 1,
+    xp: 0,
+    xpNeed: 10,
+    stamina: 0,
+    kills: 0,
+    elites: 0,
+    bosses: 0,
+    landmarkCount: 0,
+    biome: 'meadow',
+    banner: null,
+    choosing: false,
+    choices: [],
+    boss: null,
+    abilityCd: 0,
+    dashCd: 0,
+    buffT: 0,
+    objective: { name: '', dist: 0, x: 0, z: 0 },
+    px: 0,
+    pz: 0,
+    event: { kind: 'none', x: 0, z: 0 },
+    landmarks: [],
+    over: false,
+  };
+}
 
 function snapshot(w: World): Hud {
   const p = w.player;
@@ -747,6 +824,21 @@ const ActionButton = React.memo(function ActionButton({
 
 const styles = StyleSheet.create({
   root: { flex: 1, overflow: 'hidden', backgroundColor: '#08080F' },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(8,8,15,0.96)',
+    gap: spacing.xs,
+  },
+  errorCard: {
+    margin: spacing.xl,
+    padding: spacing.xl,
+    borderRadius: radius.xl,
+    backgroundColor: palette.surfaceAlt,
+    borderWidth: 1,
+    borderColor: 'rgba(255,107,107,0.35)',
+  },
   topRow: { flexDirection: 'row', alignItems: 'flex-start', padding: spacing.md, gap: spacing.sm },
   topLeft: { flex: 1, gap: 1 },
   topRight: { alignItems: 'flex-end', paddingTop: 2 },

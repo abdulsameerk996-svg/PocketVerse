@@ -39,7 +39,14 @@ export type GameId =
   | 'colorsnap'
   | 'survive60'
   | 'hookrun'
-  | 'towerdef';
+  | 'towerdef'
+  // quick-play collection (Phase 8)
+  | 'dodgerain'
+  | 'onetap'
+  | 'nummerge'
+  | 'lasersurvive'
+  | 'memrush'
+  | 'orbitguard';
 
 /* ------------------------------------------------------------------ */
 /* Currency & rewards                                                  */
@@ -317,7 +324,20 @@ export type MetricKey =
   | 'hookrun_distance'
   | 'hookrun_grapples'
   | 'towerdef_wave'
-  | 'towerdef_kills';
+  | 'towerdef_kills'
+  // Phase 8 quick-play collection
+  | 'dodgerain_time'
+  | 'dodgerain_dodges'
+  | 'onetap_distance'
+  | 'onetap_passes'
+  | 'nummerge_score'
+  | 'nummerge_merges'
+  | 'lasersurvive_time'
+  | 'lasersurvive_dodges'
+  | 'memrush_score'
+  | 'memrush_streak'
+  | 'orbitguard_time'
+  | 'orbitguard_blocks';
 
 export type MetricDelta = Partial<Record<MetricKey, number>>;
 
@@ -335,6 +355,13 @@ export const METRIC_MODE: Partial<Record<MetricKey, 'sum' | 'max'>> = {
   survive60_time: 'max',
   hookrun_distance: 'max',
   towerdef_wave: 'max',
+  dodgerain_time: 'max',
+  onetap_distance: 'max',
+  nummerge_score: 'max',
+  lasersurvive_time: 'max',
+  memrush_score: 'max',
+  memrush_streak: 'max',
+  orbitguard_time: 'max',
 };
 
 /* ------------------------------------------------------------------ */

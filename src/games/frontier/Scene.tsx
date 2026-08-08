@@ -1,4 +1,4 @@
-import React, { memo, useLayoutEffect, useMemo, useRef } from 'react';
+import React, { memo, useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -59,6 +59,26 @@ const PICKUP_COLORS: Record<PickupKind, string> = {
 };
 
 const PROJ_COLORS = { player: '#34E2A8', enemy: '#FF6B6B' } as const;
+
+/* ------------------------------------------------- floating damage readout -- */
+
+/** Pool of floating damage numbers. Drawn as canvas-texture sprites on web;
+ *  native has no DOM canvas, so it keeps the hit-flash/death-pop feedback the
+ *  sim already drives and simply skips the readout. */
+const DMG_POOL = 16;
+const CAN_DRAW_TEXT =
+  typeof document !== 'undefined' && typeof document.createElement === 'function';
+
+type DmgEntry = {
+  active: boolean;
+  x: number;
+  y: number;
+  z: number;
+  vy: number;
+  ttl: number;
+  value: number;
+  crit: boolean;
+};
 
 const FOG: Record<BiomeId, { bg: string; fog: [number, number] }> = {
   meadow: { bg: '#0D1B14', fog: [16, 44] },
@@ -143,6 +163,62 @@ function Sim({
   const bossRef = useRef<THREE.Group>(null);
   const bossMat = useRef<THREE.MeshStandardMaterial>(null);
   const bossRingMat = useRef<THREE.MeshBasicMaterial>(null);
+
+  /* damage-number pool — entries are JS refs, sprites are created once */
+  const dmg = useRef<DmgEntry[]>(Array.from({ length: DMG_POOL }, () => ({
+    active: false, x: 0, y: 0, z: 0, vy: 0, ttl: 0, value: 0, crit: false,
+  })));
+  const dmgSprites = useMemo(() => {
+    if (!CAN_DRAW_TEXT) return [];
+    return Array.from({ length: DMG_POOL }, () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 96;
+      canvas.height = 56;
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.minFilter = THREE.LinearFilter;
+      const mat = new THREE.SpriteMaterial({
+        map: tex,
+        transparent: true,
+        depthWrite: false,
+        opacity: 0,
+      });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(1.5, 0.88, 1);
+      sprite.visible = false;
+      return { canvas, tex, sprite };
+    });
+  }, []);
+
+  const spawnDmg = useCallback((x: number, z: number, value: number, crit: boolean) => {
+    const idx = dmg.current.findIndex((d) => !d.active);
+    if (idx < 0) return;
+    const entry = dmg.current[idx];
+    entry.active = true;
+    entry.x = x;
+    entry.z = z;
+    entry.y = 1.15;
+    entry.vy = 1.7;
+    entry.ttl = 0.9;
+    entry.value = Math.round(value);
+    entry.crit = crit;
+    const slot = dmgSprites[idx];
+    if (!slot) return;
+    const ctx = slot.canvas.getContext('2d');
+    if (ctx) {
+      ctx.clearRect(0, 0, 96, 56);
+      ctx.font = `bold ${crit ? 34 : 28}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = 'rgba(8,8,15,0.92)';
+      ctx.lineWidth = 5;
+      ctx.strokeText(`${entry.value}`, 48, 28);
+      ctx.fillStyle = crit ? '#FFD166' : '#FFFFFF';
+      ctx.fillText(`${entry.value}`, 48, 28);
+    }
+    slot.tex.needsUpdate = true;
+    slot.sprite.visible = true;
+  }, [dmg, dmgSprites]);
   const eventRef = useRef<THREE.Group>(null);
   const eventRingMat = useRef<THREE.MeshBasicMaterial>(null);
   const eventColMat = useRef<THREE.MeshBasicMaterial>(null);
@@ -167,6 +243,7 @@ function Sim({
     abilityCd: 2,
     bossActive: false,
     bossDead: false,
+    bossHp: 0,
     // Array.from, not Array.fill: fill would hand every slot the SAME object,
     // so one enemy's state would read as every enemy's state and the death-pop
     // edge detection would burst sparks at wrong positions all over the field.
@@ -175,6 +252,7 @@ function Sim({
       x: 0,
       z: 0,
       kind: 'walker' as EnemyKind,
+      hp: 0,
     })),
   });
 
@@ -294,6 +372,12 @@ function Sim({
         if (pv.on && !e.active) {
           sparks.current?.burst(pv.x, 0.6, pv.z, ENEMIES[pv.kind].color, 6, 2.6);
         }
+        // damage readout — a falling hp is a hit; a rising hp is a spawn
+        if (e.active && e.hp < pv.hp) {
+          const dealt = pv.hp - e.hp;
+          spawnDmg(e.x, e.z, dealt, dealt >= 28);
+        }
+        pv.hp = e.hp;
         pv.on = e.active;
         if (e.active) {
           pv.x = e.x;
@@ -501,9 +585,37 @@ function Sim({
         pr.bossDead = true;
         sparks.current?.burst(b.x, 1.6, b.z, BOSSES[b.id].accent, 40, 6.5);
       }
+      if (b.active && !b.dead && b.hp < pr.bossHp) {
+        spawnDmg(b.x, b.z, pr.bossHp - b.hp, true);
+      }
+      pr.bossHp = b.hp;
     } else if (pr.bossActive) {
       pr.bossActive = false;
       pr.bossDead = false;
+      pr.bossHp = 0;
+    }
+
+    /* ----------------------------------- damage numbers (rise + fade) ---- */
+    const dl = dmg.current;
+    for (let i = 0; i < dl.length; i++) {
+      const de = dl[i];
+      const slot = dmgSprites[i];
+      if (!de.active) {
+        if (slot) slot.sprite.visible = false;
+        continue;
+      }
+      de.y += de.vy * dt;
+      de.ttl -= dt;
+      if (de.ttl <= 0) {
+        de.active = false;
+        if (slot) slot.sprite.visible = false;
+        continue;
+      }
+      if (slot) {
+        slot.sprite.position.set(de.x, de.y, de.z);
+        slot.sprite.visible = true;
+        (slot.sprite.material as THREE.SpriteMaterial).opacity = Math.min(1, de.ttl / 0.35);
+      }
     }
   });
 
@@ -624,6 +736,11 @@ function Sim({
 
       {/* ------------------------------------------------ landmarks -------- */}
       <LandmarkMarkers world={world} />
+
+      {/* ----------------------------------------- damage number sprites --- */}
+      {dmgSprites.map((slot, i) => (
+        <primitive key={i} object={slot.sprite} />
+      ))}
 
       {/* ----------------------------------------------- objective marker --- */}
       <group ref={objectiveRef}>

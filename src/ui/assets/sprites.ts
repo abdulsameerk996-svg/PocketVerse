@@ -947,6 +947,63 @@ const handIcon = (color: string): SpriteShape[] => [
 type ItemLike = Pick<ItemDef, 'id' | 'kind' | 'rarity' | 'glyph' | 'name'> &
   Partial<Pick<ItemDef, 'tint' | 'slot' | 'source'>>;
 
+/* ------------------------------------------------- Phase 8 quick-play set */
+
+const rain = (color: string): SpriteShape[] => [
+  poly(
+    [
+      [32, 8], [46, 40], [32, 56], [18, 40],
+    ],
+    color,
+  ),
+  line(32, 22, 32, 36, 2.5, alpha('#0B0B14', 0.45), 0.75),
+  c(26, 45, 3, alpha(tint(color, 0.35), 0.8)),
+];
+
+const wing = (color: string): SpriteShape[] => [
+  poly(
+    [
+      [8, 46], [30, 16], [56, 8], [46, 30], [56, 44], [32, 40],
+    ],
+    color,
+  ),
+  poly(
+    [
+      [20, 42], [34, 24], [50, 18], [44, 32], [50, 40], [34, 38],
+    ],
+    alpha(tint(color, 0.35), 0.55),
+    0.5,
+  ),
+];
+
+const merge = (color: string): SpriteShape[] => [
+  rr(12, 22, 24, 24, 5, tint(color, -0.15)),
+  rr(28, 14, 24, 24, 5, color),
+  c(40, 26, 3.5, palette.abyss),
+  c(26, 34, 2.5, alpha(palette.abyss, 0.8)),
+];
+
+const laser = (color: string): SpriteShape[] => [
+  line(9, 9, 55, 55, 4.5, color, 0.9),
+  line(55, 9, 9, 55, 4.5, color, 0.9),
+  c(32, 32, 8, tint(color, 0.25)),
+  c(32, 32, 3.5, palette.abyss),
+];
+
+const pulse = (color: string): SpriteShape[] => [
+  ring(32, 32, 8, 3.2, color, 0.95),
+  ring(32, 32, 17, 2.6, color, 0.6),
+  ring(32, 32, 26, 2, color, 0.35),
+  c(32, 32, 4.5, color),
+];
+
+const orbit = (color: string): SpriteShape[] => [
+  ring(32, 32, 16, 3, color),
+  c(32, 13, 4, tint(color, 0.25)),
+  c(49, 41, 4, color),
+  c(16, 45, 3, tint(color, -0.2)),
+];
+
 const MOTIFS = {
   bolt, gear, star, sparkle, leaf, sprout, fish, cup, gun, car, pen, shield,
   skull, notes, gamepad, joystick, target, compass, bag, chart, calendar,
@@ -956,6 +1013,7 @@ const MOTIFS = {
   hatCrown, hatHelmet, halo, tShirt, hoodie, jacket, overalls, sneaker, boot,
   ribbon, chip, battery, pill, clover, lamp, plant, rug, aquarium, neonSign,
   consoleIcon, poster, motifRing, motifLine, handIcon,
+  rain, wing, merge, laser, pulse, orbit,
 } as const;
 
 type MotifKey = keyof typeof MOTIFS;
@@ -1157,6 +1215,13 @@ export const GAME_THUMBS: Record<string, MotifKey> = {
   hookrun: 'wave',
   survive60: 'heart',
   towerdef: 'shield',
+  // Phase 8 quick-play set
+  dodgerain: 'rain',
+  onetap: 'wing',
+  nummerge: 'merge',
+  lasersurvive: 'laser',
+  memrush: 'pulse',
+  orbitguard: 'orbit',
 };
 
 /** Game thumbnail. `accent` is the module's own accent colour. */

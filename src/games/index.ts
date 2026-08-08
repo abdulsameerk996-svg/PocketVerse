@@ -24,6 +24,13 @@ import { colorSnapModule } from './colorsnap';
 import { survive60Module } from './survive60';
 import { hookRunModule } from './hookrun';
 import { towerDefModule } from './towerdef';
+// Phase 8 quick-play collection
+import { dodgeRainModule } from './dodgerain';
+import { oneTapModule } from './onetap';
+import { numMergeModule } from './nummerge';
+import { laserSurviveModule } from './lasersurvive';
+import { memRushModule } from './memrush';
+import { orbitGuardModule } from './orbitguard';
 
 /**
  * ============================================================================
@@ -44,6 +51,12 @@ export const GAME_MODULES = [
   survive60Module,
   hookRunModule,
   towerDefModule,
+  dodgeRainModule,
+  oneTapModule,
+  numMergeModule,
+  laserSurviveModule,
+  memRushModule,
+  orbitGuardModule,
 
   petModule,
   runnerModule,

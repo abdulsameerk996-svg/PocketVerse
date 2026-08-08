@@ -672,6 +672,15 @@ const LoadoutSheet = React.memo(function LoadoutSheet({
           badly it misses. A harder desk pays more coins and XP.
           {armorHint > 0 ? ' Your equipped armour does nothing here; pens do not bleed.' : ''}
         </Text>
+        <View style={styles.ruleLine}>
+          <Text variant="micro" color={palette.gold}>
+            HOUSE RULE
+          </Text>
+          <Text variant="caption" muted style={{ marginTop: 2 }}>
+            Knock the rival out on your very first flick of a round and the win is
+            refused — the round re-racks into a tiebreaker instead.
+          </Text>
+        </View>
       </Card>
 
       <Button label="Back to the desk" onPress={onClose} full style={{ marginTop: spacing.lg }} />
@@ -732,5 +741,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.hairline,
     backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  ruleLine: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: palette.hairline,
   },
 });
