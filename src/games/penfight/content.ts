@@ -1,5 +1,5 @@
 import type { ItemDef } from '@/core/types';
-import type { Difficulty, PenFightSave, PenSkinId, Table } from './types';
+import type { Difficulty, PenFightSave, PenSkinId, SideId, Table } from './types';
 
 /**
  * PEN FIGHT — content tables.
@@ -43,6 +43,43 @@ export const ROUNDS_TO_WIN = 2;
  * and re-racked, so a match cannot run forever on a cautious pair of players.
  */
 export const MAX_TURNS_PER_ROUND = 14;
+
+/* ------------------------------------------------------------ round rules -- */
+
+/**
+ * The verdict on a settled round.
+ *
+ * `decideRound` is the single place round-end outcomes are judged, so the
+ * first-turn-out rule lives in a pure module the simulation can exercise — the
+ * same logic `PenFightGame` runs on every settle.
+ *
+ * THE RULE: a complete out landed on the very first flick of a round does not
+ * decide the round. Immediate wins are not allowed — the pens re-rack and a
+ * tiebreaker is played, the victim flicking first, until someone actually outs
+ * the other. Later-turn outs, double outs and stalemates behave exactly as
+ * before.
+ */
+export type RoundDecision =
+  | { kind: 'tiebreak'; victim: SideId }
+  | { kind: 'roundOver'; loser: SideId | null }
+  | { kind: 'continue' };
+
+export function decideRound(
+  fell: SideId[],
+  turnsUsed: number,
+  tiebreak = false,
+): RoundDecision {
+  if (fell.length === 1 && turnsUsed === 1 && !tiebreak) {
+    return { kind: 'tiebreak', victim: fell[0] };
+  }
+  if (fell.length > 0) {
+    return { kind: 'roundOver', loser: fell.length > 1 ? null : fell[0] };
+  }
+  if (turnsUsed >= MAX_TURNS_PER_ROUND) {
+    return { kind: 'roundOver', loser: null };
+  }
+  return { kind: 'continue' };
+}
 
 /** Longest drag, in points, that still counts as more power. */
 export const MAX_DRAG_PX = 190;

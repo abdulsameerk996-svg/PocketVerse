@@ -6,7 +6,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from 'react-native-reanimated';
-import { PressableScale, Text, haptics, palette, radius, spacing } from '@/ui';
+import { PressableScale, SpriteView, Text, haptics, palette, radius, spacing, spriteForIcon } from '@/ui';
 import type { ChallengeProps } from './types';
 
 /**
@@ -91,7 +91,22 @@ export function ReflexGrid({ onEnd }: ChallengeProps) {
             >
               {t ? (
                 <Animated.View entering={FadeIn.duration(90)} exiting={FadeOut.duration(120)}>
-                  <Text size={30}>{t.bad ? 'ðŸ’£' : 'ðŸŸ¢'}</Text>
+                  {/*
+                    Vector sprites, not emoji glyphs: the original strings here
+                    were corrupted bytes (the "YYO…" the UI showed), and the
+                    Phase 6 sprite system replaces glyph art. Both cells resolve
+                    through the central icon map — explosion for the bomb to
+                    avoid, ring for the disc to tap — so they render crisp at
+                    any size and stay accessible.
+                  */}
+                  <SpriteView
+                    sprite={spriteForIcon(
+                      t.bad ? '\u{1F4A5}' : '\u{2B55}',
+                      t.bad ? 'Bomb' : 'Target',
+                      t.bad ? palette.coral : palette.mint,
+                    )}
+                    size={30}
+                  />
                 </Animated.View>
               ) : null}
             </PressableScale>
@@ -245,14 +260,59 @@ export function ColourMatch({ onEnd }: ChallengeProps) {
  * that is only in the rotation two days out of three.
  */
 export function MeteorDodge(props: ChallengeProps) {
+  // Retrying swaps in a brand-new lazy component: React.lazy caches a failed
+  // import on the component type, so recovery requires a fresh type.
+  const [Lazy, setLazy] = useState(() => React.lazy(() => import('./MeteorDodge3D')));
   return (
-    <React.Suspense fallback={<ChallengeLoading />}>
-      <MeteorDodgeLazy {...props} />
-    </React.Suspense>
+    <ChallengeErrorBoundary onRetry={() => setLazy(React.lazy(() => import('./MeteorDodge3D')))}>
+      <React.Suspense fallback={<ChallengeLoading />}>
+        <Lazy {...props} />
+      </React.Suspense>
+    </ChallengeErrorBoundary>
   );
 }
 
-const MeteorDodgeLazy = React.lazy(() => import('./MeteorDodge3D'));
+/**
+ * If the lazy chunk fails to load (transient network, deploy race, or the SPA
+ * fallback answering a missing asset with HTML), the arcade must recover
+ * instead of blanking — without this, one bad chunk load bricks the screen.
+ */
+class ChallengeErrorBoundary extends React.Component<
+  { onRetry: () => void; children: React.ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (this.state.failed) {
+      return (
+        <View style={[styles.wrap, styles.errorWrap]}>
+          <Text variant="title" center>
+            Couldn't load this challenge
+          </Text>
+          <Text variant="caption" muted center>
+            The arena failed to load — usually a network hiccup. Try again.
+          </Text>
+          <PressableScale
+            onPress={() => {
+              this.setState({ failed: false });
+              this.props.onRetry();
+            }}
+            scaleTo={0.95}
+            style={styles.retryBtn}
+          >
+            <Text variant="label" color={palette.violet}>
+              TRY AGAIN
+            </Text>
+          </PressableScale>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function ChallengeLoading() {
   return (
@@ -304,6 +364,21 @@ function ChallengeHeader({
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, paddingHorizontal: spacing.lg, gap: spacing.lg },
+  errorWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    paddingBottom: spacing.xxl,
+  },
+  retryBtn: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: `${palette.violet}88`,
+    backgroundColor: 'rgba(124,92,255,0.12)',
+  },
   header: { alignItems: 'center', gap: 2 },
   headerRow: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.sm },
   grid3: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, justifyContent: 'center' },

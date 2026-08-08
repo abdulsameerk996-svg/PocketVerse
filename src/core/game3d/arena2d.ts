@@ -54,6 +54,10 @@ export function stepWorld(
 
 export function integrate(b: Body, h: number) {
   if (!b.awake) return;
+  // Defensive: a poisoned velocity (NaN from any upstream bug) must never
+  // propagate into position or stick the body for the rest of the match.
+  if (!Number.isFinite(b.vx)) b.vx = 0;
+  if (!Number.isFinite(b.vz)) b.vz = 0;
   b.x += b.vx * h;
   b.z += b.vz * h;
   const k = Math.exp(-b.damping * h);
@@ -90,6 +94,14 @@ const NO_HIT: Hit = { happened: false, nx: 0, nz: 0, impulse: 0 };
  * Returns the contact normal and impulse so callers can spawn effects.
  */
 export function collide(a: Body, b: Body, restitution = 0.9): Hit {
+  // Corner recovery: a body whose position has gone non-finite must not spread
+  // the NaN through the whole field — drop the contact instead.
+  if (
+    !Number.isFinite(a.x) || !Number.isFinite(a.z) ||
+    !Number.isFinite(b.x) || !Number.isFinite(b.z)
+  ) {
+    return NO_HIT;
+  }
   let nx = a.x - b.x;
   let nz = a.z - b.z;
   let dist = Math.hypot(nx, nz);
@@ -161,6 +173,12 @@ export function bounceRect(
 
 /** Keep a body inside a rectangle without bouncing (players, paddles). */
 export function clampRect(b: Body, halfW: number, halfD: number, inset = 0) {
+  // Recover non-finite bodies deterministically (centre) before clamping, so a
+  // bad value can never leave the character permanently outside the world.
+  if (!Number.isFinite(b.x)) b.x = 0;
+  if (!Number.isFinite(b.z)) b.z = 0;
+  if (!Number.isFinite(b.vx)) b.vx = 0;
+  if (!Number.isFinite(b.vz)) b.vz = 0;
   const w = halfW - b.radius - inset;
   const d = halfD - b.radius - inset;
   if (b.x < -w) {

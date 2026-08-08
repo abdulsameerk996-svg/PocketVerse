@@ -22,6 +22,7 @@ import {
 
 import { AI_PROFILES, DIFFICULTY_LABEL, chooseLaunch, thinkingTime } from './ai';
 import {
+  decideRound,
   MAX_DRAG_PX,
   MAX_TURNS_PER_ROUND,
   PEN_SKINS,
@@ -112,6 +113,8 @@ export function PenFightGame({
   const flicks = useRef(0);
   const knockouts = useRef(0);
   const fellThisRound = useRef<SideId[]>([]);
+  /** True once a first-turn out has sent this round to a tiebreaker. */
+  const tiebreak = useRef(false);
   const finished = useRef(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -294,6 +297,8 @@ export function PenFightGame({
 
   const finishRound = useCallback(
     (loser: SideId | null) => {
+      // Every completed round (win, draw, stalemate) starts the next one fresh.
+      tiebreak.current = false;
       const winner: SideId | null = loser === null ? null : loser === 'player' ? 'rival' : 'player';
 
       const next = { ...rounds };
@@ -352,21 +357,31 @@ export function PenFightGame({
   const onSettled = useCallback(() => {
     if (finished.current) return;
 
-    const fell = fellThisRound.current;
-    if (fell.length > 0) {
-      // Both off in one exchange is a genuine draw — nobody scores.
-      const loser: SideId | null = fell.length > 1 ? null : fell[0];
-      finishRound(loser);
+    const decision = decideRound(fellThisRound.current, turnsThisRound.current, tiebreak.current);
+
+    if (decision.kind === 'tiebreak') {
+      // FIRST-TURN OUT — an immediate win is not allowed. Re-rack and let the
+      // victim open the tiebreaker; the round is decided only when the
+      // tiebreaker itself produces an out (or a draw).
+      tiebreak.current = true;
+      setBanner('FIRST-TURN OUT!\nImmediate wins are not allowed.\nPlay the tiebreaker.');
+      setPhase('roundEnd');
+      const first = decision.victim;
+      later(() => {
+        setBanner(null);
+        rack(first);
+        passTurnRef.current(first);
+      }, 1700);
       return;
     }
 
-    if (turnsThisRound.current >= MAX_TURNS_PER_ROUND) {
-      finishRound(null);
+    if (decision.kind === 'roundOver') {
+      finishRound(decision.loser);
       return;
     }
 
     passTurnRef.current(turnRef.current === 'player' ? 'rival' : 'player');
-  }, [finishRound]);
+  }, [finishRound, later, rack, setPhase]);
 
   /* ------------------------------------------------------------- controls */
 
@@ -429,6 +444,7 @@ export function PenFightGame({
   const resetRound = useCallback(() => {
     if (phaseRef.current !== 'aim') return;
     haptics.tap();
+    tiebreak.current = false;
     rack('player');
     passTurnRef.current('player');
   }, [rack]);
@@ -491,9 +507,14 @@ export function PenFightGame({
 
       {banner ? (
         <View pointerEvents="none" style={styles.banner}>
-          <Text variant="display" center>
-            {banner}
+          <Text variant="display" center color={palette.sky}>
+            {banner.split('\n')[0]}
           </Text>
+          {banner.split('\n').slice(1).map((line, i) => (
+            <Text key={i} variant="subheading" center muted style={{ marginTop: 2 }}>
+              {line}
+            </Text>
+          ))}
         </View>
       ) : null}
 

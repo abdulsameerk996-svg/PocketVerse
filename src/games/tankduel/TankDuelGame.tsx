@@ -254,6 +254,11 @@ function Field({
           }
         }
 
+        // Defensive: a bad value must never freeze a tank or break its turret.
+        if (!Number.isFinite(t.vx) || !Number.isFinite(t.vz)) {
+          t.vx = 0;
+          t.vz = 0;
+        }
         const sp = Math.hypot(t.vx, t.vz);
         if (sp > MAX_SPEED) {
           t.vx = (t.vx / sp) * MAX_SPEED;
@@ -270,6 +275,10 @@ function Field({
           if (b.hp <= 0) continue;
           resolveBoxCircle(t, b, TANK_R);
         }
+        // A tank wedged between cover and a wall must never be shoved outside
+        // the arena by the resolution — re-clamp so it always stays playable.
+        t.x = clamp(t.x, -HALF_W + TANK_R, HALF_W - TANK_R);
+        t.z = clamp(t.z, -HALF_D + TANK_R, HALF_D - TANK_R);
       }
 
       if (!live) return;
