@@ -1,7 +1,7 @@
 # PocketVerse
 
 An offline-first mobile game built with **Expo + React Native + TypeScript + Expo Router**.
-Eleven games, one avatar, one inventory, one save file. No backend, no account, no network.
+Twenty-eight games, one avatar, one inventory, one save file. No backend, no account, no network.
 
 ```bash
 npm install
@@ -18,7 +18,7 @@ npm run typecheck       # tsc --noEmit, zero errors expected
 
 ## What it is
 
-PocketVerse is deliberately **not** a launcher with eleven unrelated games behind it.
+PocketVerse is deliberately **not** a launcher with twenty-eight unrelated games behind it.
 Everything the player does anywhere lands in the same place:
 
 | Shared system | Where it lives | Why it matters |
@@ -55,14 +55,15 @@ src/
 ├─ ui/
 │  ├─ theme/                  design tokens + responsive scaling
 │  │
-│  │  (games/penfight is the one module with a scene/ folder — the 3D arena.
-│  │   It is lazy-imported so three.js never loads unless you open it.)
+│  │  (games/penfight has a scene/ folder and games/frontier a Scene.tsx —
+│  │   the 3D modules. Both are lazy-imported so three.js never loads unless
+│  │   you open one.)
 │  ├─ components/             Screen, Card, Button, ItemTile, AvatarView, …
 │  ├─ fx/                     particles, confetti, shimmer, starfield
 │  ├─ game/                   GameHud, PauseSheet, ResultsSheet, LiveValue
 │  └─ hooks/                  haptics façade, sound cue façade
 ├─ content/                   world catalog: items, quests, achievements, dailies
-└─ games/                     ten plug-in modules + one registration file
+└─ games/                     twenty-eight plug-in modules + one registration file
 ```
 
 See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the full design, and
@@ -74,17 +75,34 @@ See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the full design, and
 
 | # | Game | Kind | Loop |
 |---|---|---|---|
-| 1 | **Pocket Pet** 🐣 | ambient | Feed, clean, play, sleep. Stats decay on real time and are simulated at boot. |
-| 2 | **Neon Sprint** 🏃 | session | Three-lane endless runner. Jump, slide, magnets, shields, skins. |
-| 3 | **Highway Drift** 🏎️ | session | Procedurally curving endless road, traffic, near-misses, mission chain, unlockable cars. |
-| 4 | **Logic Deck** 🧩 | session | Three puzzle modes (Blackout, Shuffle, Echo) + a date-seeded daily. |
-| 5 | **Last Signal** 🧟 | session | Top-down wave survival, auto-targeting, persistent weapon upgrades bought with scrap. |
-| 6 | **Homestead** 🌾 | ambient | Plots, seeds, real-time growth, harvest, plot expansion. |
-| 7 | **Still Waters** 🎣 | ambient | Cast → bite → reel minigame. Four locations, twenty species, collection screen. |
-| 8 | **Skyward** 🧗 | session | Five data-driven platformer levels with hidden gems. |
-| 9 | **Signal Beat** 🎧 | session | Four-lane rhythm game, charts generated deterministically per track, combo multiplier. |
-| 10 | **The Arcade** 🕹️ | session | Four micro-games, three rotate daily, high scores kept forever. |
-| 11 | **Pen Fight** 🖊️ | session · **3D** | Real-time capsule physics on a desk. Drag back to aim, release to flick, knock the rival's pen over the edge. Best of three against an AI. |
+| 1 | **PocketVerse Frontier** 🧭 | session · **3D** | The flagship. Seeded open-world survival: four biomes, six enemy archetypes, three phase-bosses, in-run upgrades, permanent boss-kill progression. |
+| 2 | **Stack Rush** 🧱 | session | Align the falling block, grow the tower, chain perfect drops. |
+| 3 | **Color Snap** 🎯 | session | See the disc, beat the clock — spot the exact colour. |
+| 4 | **Survive 60** 🏃 | session | One minute against a screen of converging chasers. |
+| 5 | **Hook Run** 🪝 | session | Swing anchor to anchor, cut the line at the zenith, fly. |
+| 6 | **Tower Defense** 🛡️ | session | One path, eleven waves. Towers, upgrades, leaks. Hold the line. |
+| 7 | **Dodge Rain** 🌧️ | session | The sky is falling in patterns — keep moving. |
+| 8 | **One-Tap Flight** 🕊️ | session | One button, one bird, no mercy. |
+| 9 | **Number Merge** 🔢 | session | Slide, fuse, climb — a pocket 2048. |
+| 10 | **Laser Survive** ⚡ | session | Read the gap, dodge the beam. |
+| 11 | **Memory Rush** 🧠 | session | Watch the lights, repeat the pattern. |
+| 12 | **Orbit Guard** 🪐 | session | Swing the shield, save the core. |
+| 13 | **Pocket Pet** 🐣 | ambient | Feed, clean, play, sleep. Stats decay on real time and are simulated at boot. |
+| 14 | **Neon Sprint** 🏃 | session | Three-lane endless runner. Jump, slide, magnets, shields, skins. |
+| 15 | **Highway Drift** 🏎️ | session | Procedurally curving endless road, traffic, near-misses, mission chain, unlockable cars. |
+| 16 | **Logic Deck** 🧩 | session | Three puzzle modes (Blackout, Shuffle, Echo) + a date-seeded daily. |
+| 17 | **Last Signal** 🧟 | session | Top-down wave survival, auto-targeting, persistent weapon upgrades bought with scrap. |
+| 18 | **Homestead** 🌾 | ambient | Plots, seeds, real-time growth, harvest, plot expansion. |
+| 19 | **Still Waters** 🎣 | ambient | Cast → bite → reel minigame. Four locations, twenty species, collection screen. |
+| 20 | **Skyward** 🧗 | session | Five data-driven platformer levels with hidden gems. |
+| 21 | **Signal Beat** 🎧 | session | Four-lane rhythm game, charts generated deterministically per track, combo multiplier. |
+| 22 | **The Arcade** 🕹️ | session | Rotating micro-games — including 3D Meteor Dodge — high scores kept forever. |
+| 23 | **Pen Fight** 🖊️ | session · **3D** | Real-time capsule physics on a desk. Drag back to aim, release to flick, knock the rival's pen over the edge. Best of three against an AI. |
+| 24 | **Air Hockey** 🏒 | session · **3D** · 2P | Two paddles, one puck, no mercy. |
+| 25 | **Sumo Push** 🥋 | session · **3D** · 2P | Shove them off. Do not follow them. |
+| 26 | **Tank Duel** 🎖️ | session · **3D** · 2P | Aim where you drive. Cover will not last. |
+| 27 | **Color Clash** 🎨 | session · **3D** · 2P | Paint the floor. Steal it back. |
+| 28 | **Dodge Duel** 💨 | session · **3D** · 2P | It only stops when one of you does. |
 
 ---
 

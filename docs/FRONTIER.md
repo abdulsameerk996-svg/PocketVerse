@@ -11,10 +11,13 @@ beside it.
 ```
 src/games/frontier/
 ├─ types.ts            sim + save types (pure)
-├─ content.ts          enemy/boss/upgrade tables, save defaults + normalise
+├─ content.ts          enemy/boss/upgrade tables, save defaults + normalise.
+│                      Boss *definitions* (stats, names, colours) live here;
+│                      the three boss *brains* (phases, telegraphs, summons)
+│                      live in sim.ts alongside the rest of the simulation.
 ├─ world.ts            seeded world generation (biomes, landmarks, decor)
-├─ bosses.ts           three boss brains (phases, telegraphs, summons)
 ├─ sim.ts              the simulation core (pure TS, no React, no three.js)
+│                      — includes the boss phase machines (no bosses.ts)
 ├─ Scene.tsx           R3F presentation (lazy-imported — three.js never loads
 │                      unless Frontier is opened, see ADDING_A_GAME.md)
 ├─ FrontierSurface.tsx the shell: input, HUD, minimap, upgrade sheet

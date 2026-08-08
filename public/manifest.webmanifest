@@ -1,7 +1,7 @@
 {
   "name": "PocketVerse",
   "short_name": "PocketVerse",
-  "description": "Eleven games, one avatar, one inventory, one save file. Offline-first, no account, no network.",
+  "description": "Twenty-eight games, one avatar, one inventory, one save file. Offline-first, no account, no network.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

@@ -1,10 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { HAS_KEYBOARD } from '@/core/game3d';
-import { Button, Text, haptics, palette, play, radius, spacing } from '@/ui';
+import {
+  Button,
+  Card,
+  SpriteView,
+  Text,
+  haptics,
+  palette,
+  play,
+  radius,
+  spacing,
+  spriteForGame,
+} from '@/ui';
 import { BIOMES, BOSSES, UPGRADE_MAP, normalizeFrontierSave } from './content';
 import { applyUpgrade, createRun, finishRun } from './sim';
 import { FrontierScene, type CamDiag } from './Scene';
@@ -82,8 +94,12 @@ export default function FrontierSurface({
 
   // World creation is a one-shot per run. A failed seed must surface as a
   // readable error screen instead of a blank canvas; `attempt` rebuilds it.
+  // The run itself only begins from the start menu, so the sim never exists
+  // until the player commits to it.
   const [attempt, setAttempt] = useState(0);
+  const [stage, setStage] = useState<'menu' | 'run'>('menu');
   const world = useMemo(() => {
+    if (stage !== 'run') return null;
     try {
       return createRun(seed, normalizeFrontierSave(save), mods);
     } catch (e) {
@@ -91,7 +107,7 @@ export default function FrontierSurface({
       return null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seed, attempt]);
+  }, [seed, attempt, stage]);
 
   const worldRef = useRef<World | null>(null);
   if (world && worldRef.current === null) worldRef.current = world;
@@ -315,6 +331,10 @@ export default function FrontierSurface({
 
   const showTouch = !HAS_KEYBOARD;
 
+  if (stage === 'menu') {
+    return <FrontierMenu save={save} onStart={() => setStage('run')} />;
+  }
+
   if (!world) {
     return (
       <View style={styles.root}>
@@ -420,6 +440,150 @@ export default function FrontierSurface({
       ) : null}
     </View>
   );
+}
+
+/* ============================================================ start menu == */
+
+/**
+ * Pre-run menu. The host has already paid the energy cost; this screen is the
+ * honest "should you go out again" moment — your best run, the permanent
+ * upgrades your boss kills earned, and the controls, all read from the same
+ * persisted save the run will write to. No fabricated stats: every number
+ * comes out of `normalizeFrontierSave`.
+ */
+function FrontierMenu({ save, onStart }: { save: unknown; onStart: () => void }) {
+  const [showHelp, setShowHelp] = useState(false);
+  const s = normalizeFrontierSave(save);
+  const hasRun = s.runs > 0;
+  const bossNames = s.bossesDefeated
+    .map((id) => BOSSES[id]?.name)
+    .filter((n): n is string => !!n)
+    .join(' · ');
+  const upgrades = [
+    { label: 'DMG', value: `+${Math.round(s.permanent.damage * 100)}%` },
+    { label: 'HP', value: `+${Math.round(s.permanent.maxHp)}` },
+    { label: 'SPEED', value: `+${Math.round(s.permanent.moveSpeed * 100)}%` },
+  ];
+
+  return (
+    <View style={styles.menuRoot}>
+      <LinearGradient colors={['#0D1B3A', '#08080F']} style={StyleSheet.absoluteFill} />
+      <ScrollView
+        contentContainerStyle={styles.menuScroll}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text variant="micro" color={palette.cyan} center>
+          POCKETVERSE · FLAGSHIP
+        </Text>
+        <View style={styles.menuLogo}>
+          <SpriteView
+            sprite={spriteForGame('frontier', palette.cyan, 'PocketVerse Frontier')}
+            size={92}
+            label="PocketVerse Frontier"
+          />
+        </View>
+        <Text variant="display" center>
+          Frontier
+        </Text>
+        <Text variant="body" muted center>
+          Explore. Fight. Survive.
+        </Text>
+
+        {hasRun ? (
+          <Card variant="glass" padding={spacing.lg} style={styles.menuCard}>
+            <View style={styles.statRow}>
+              <StatCell label="BEST SCORE" value={String(s.bestScore)} tone={palette.gold} />
+              <StatCell label="BEST TIME" value={fmtClock(s.bestTime)} tone={palette.cyan} />
+              <StatCell label="BOSSES" value={String(s.bossesDefeated.length)} tone={palette.coral} />
+            </View>
+            <View style={styles.menuDivider} />
+            <Text variant="micro" muted center>
+              {s.runs} RUNS · {s.totalKills} KILLS{bossNames ? ` · ${bossNames}` : ''}
+            </Text>
+            <View style={styles.upgradeRow}>
+              {upgrades.map((u) => (
+                <View key={u.label} style={styles.upgradeChip}>
+                  <Text variant="micro" color={palette.mint}>
+                    {u.label} {u.value}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <Text variant="micro" faint center style={{ marginTop: spacing.xs }}>
+              Permanent — earned by defeating bosses
+            </Text>
+          </Card>
+        ) : (
+          <Card variant="glass" padding={spacing.lg} style={styles.menuCard}>
+            <Text variant="caption" muted center>
+              No run yet. The frontier is seeded fresh every time you step in —
+              every run is a new world.
+            </Text>
+          </Card>
+        )}
+
+        <Pressable onPress={() => setShowHelp((v) => !v)} style={styles.helpToggle}>
+          <Text variant="label" color={palette.cyan}>
+            HOW TO PLAY {showHelp ? '▾' : '▸'}
+          </Text>
+        </Pressable>
+        {showHelp ? (
+          <Card variant="glass" padding={spacing.lg} style={styles.menuCard}>
+            {HELP_ROWS.map(([k, v]) => (
+              <View key={k} style={styles.helpRow}>
+                <Text variant="label" style={{ width: 92 }}>
+                  {k}
+                </Text>
+                <Text variant="caption" muted style={{ flex: 1 }}>
+                  {v}
+                </Text>
+              </View>
+            ))}
+          </Card>
+        ) : null}
+
+        <Button
+          label="Start run"
+          icon="▶"
+          size="lg"
+          full
+          shine
+          onPress={onStart}
+          style={{ marginTop: spacing.lg }}
+        />
+        <Text variant="caption" faint center style={{ marginTop: spacing.sm }}>
+          One life per run · rewards land when you fall
+        </Text>
+      </ScrollView>
+    </View>
+  );
+}
+
+const HELP_ROWS: [string, string][] = [
+  ['Move', 'Virtual stick — or WASD / arrow keys'],
+  ['Sprint', 'Hold RUN — or Shift'],
+  ['Dash', '💨 button — brief invulnerability'],
+  ['Melee', '⚔️ button — or Space'],
+  ['Nova', '💥 button — radial blast, cooldown'],
+  ['Goal', 'Reach landmarks, beat the three bosses, survive'],
+];
+
+function StatCell({ label, value, tone }: { label: string; value: string; tone: string }) {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+      <Text variant="micro" faint>
+        {label}
+      </Text>
+      <Text variant="subheading" color={tone}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function fmtClock(seconds: number) {
+  const s = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 /* ================================================ dev renderer readout == */
@@ -824,6 +988,28 @@ const ActionButton = React.memo(function ActionButton({
 
 const styles = StyleSheet.create({
   root: { flex: 1, overflow: 'hidden', backgroundColor: '#08080F' },
+  menuRoot: { flex: 1, backgroundColor: '#08080F' },
+  menuScroll: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: spacing.xl,
+    gap: spacing.sm,
+  },
+  menuLogo: { alignSelf: 'center', marginTop: spacing.md },
+  menuCard: { width: '100%', marginTop: spacing.md, gap: spacing.sm },
+  statRow: { flexDirection: 'row', gap: spacing.sm },
+  menuDivider: { height: 1, backgroundColor: palette.hairline, marginVertical: spacing.xs },
+  upgradeRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs, justifyContent: 'center' },
+  upgradeChip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.xs,
+    backgroundColor: 'rgba(52,226,168,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(52,226,168,0.35)',
+  },
+  helpToggle: { alignSelf: 'center', marginTop: spacing.md, padding: spacing.sm },
+  helpRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingVertical: 2 },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',

@@ -1,5 +1,5 @@
 /*
- * Quick-play regression suite — plays the pure logic of all five Phase 7
+ * Quick-play regression suite — plays the pure logic of all eleven
  * quick games (compiled from src, not copies) headlessly in Node. The logic
  * modules import nothing from React/three.js/React Native; if someone drags a
  * renderer dependency into one, the require below crashes here instead of on

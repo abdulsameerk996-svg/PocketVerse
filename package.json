@@ -18,6 +18,7 @@
     "sim:frontier": "tsc -p tools/frontier-sim && node tools/frontier-sim/harness.js",
     "sim:arena": "tsc -p tools/arena-sim && node tools/arena-sim/harness.js",
     "sim:quick": "tsc -p tools/quickgames-sim && node tools/quickgames-sim/harness.js",
+  "sim:registry": "tsc -p tools/registry-sim && node tools/registry-sim/harness.js",
     "lint": "expo lint",
     "doctor": "npx expo-doctor"
   },

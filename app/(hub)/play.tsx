@@ -1,19 +1,22 @@
-import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated from 'react-native-reanimated';
 
 import { allGames } from '@/core/registry';
-import type { GameCategory } from '@/core/registry';
+import type { GameCategory, GameModule } from '@/core/registry';
 import { createRng, hashString, shuffle } from '@/core/utils/rng';
 import { dayKey } from '@/core/utils/time';
 import { gradients } from '@/ui/theme/tokens';
 import { usePlayerStore } from '@/core/state/playerStore';
-import { scoreRepo } from '@/core/db/repositories';
+import { useGameSaveStore } from '@/core/state/gameSaveStore';
+import { activityRepo, scoreRepo } from '@/core/db/repositories';
+import { normalizeFrontierSave } from '@/games/frontier/content';
 import { SpriteView, spriteForGame, spriteForLock } from '@/ui/assets';
 import {
   Card,
+  EmptyState,
   PressableScale,
   Screen,
   SectionHeader,
@@ -44,29 +47,60 @@ const SECTIONS: { id: GameCategory; label: string; blurb: string }[] = [
  *
  * Reads the module registry — it has no knowledge of which games exist. Add a
  * module and it appears here with its gating, energy cost, tags and best score
- * already wired.
+ * already wired. On top of the sections: an instant search, a Continue Playing
+ * strip built from real session history, and a featured flagship card fed by
+ * the Frontier module's own persisted best-run save.
  */
 export default function PlayScreen() {
   const router = useRouter();
   const { s: sc, width } = useResponsive();
   const player = usePlayerStore((s) => s.player);
+  const frontierSave = useGameSaveStore((s) => s.saves.frontier);
   const [filter, setFilter] = useState<Filter>('all');
+  const [query, setQuery] = useState('');
   const [bests, setBests] = useState<Record<string, number>>({});
+  const [recent, setRecent] = useState<GameModule[]>([]);
 
   const games = useMemo(() => allGames(), []);
 
-  React.useEffect(() => {
+  useEffect(() => {
     void scoreRepo.bestAll().then((rows) => {
       const map: Record<string, number> = {};
       for (const [key, v] of Object.entries(rows)) map[key.split(':')[0]] = v;
       setBests(map);
     });
-  }, []);
+    // Continue Playing = games the player actually ran, most recent first.
+    // Session activity rows carry the module title as their label, so they
+    // map back onto the registry without any extra bookkeeping.
+    void activityRepo.recent(16).then((rows) => {
+      const byTitle = new Map(games.map((g) => [g.meta.title, g]));
+      const seen = new Set<string>();
+      const list: GameModule[] = [];
+      for (const row of rows) {
+        if (row.kind !== 'session') continue;
+        const g = byTitle.get(row.label);
+        if (!g || seen.has(g.id)) continue;
+        seen.add(g.id);
+        list.push(g);
+        if (list.length >= 5) break;
+      }
+      setRecent(list);
+    });
+  }, [games]);
 
+  const frontier = useMemo(
+    () => (frontierSave ? normalizeFrontierSave(frontierSave) : null),
+    [frontierSave],
+  );
+
+  const q = query.trim().toLowerCase();
   const visible = useMemo(() => {
-    if (filter === 'all') return games;
-    return games.filter((g) => g.meta.tags.includes(filter));
-  }, [filter, games]);
+    const byFilter = filter === 'all' ? games : games.filter((g) => g.meta.tags.includes(filter));
+    if (!q) return byFilter;
+    return byFilter.filter((g) =>
+      [g.meta.title, g.meta.tagline, ...g.meta.tags].join(' ').toLowerCase().includes(q),
+    );
+  }, [filter, q, games]);
 
   const flagship = useMemo(() => visible.find((g) => g.meta.category === 'adventure'), [visible]);
 
@@ -111,6 +145,27 @@ export default function PlayScreen() {
           <StatChip glyph="⚡" value={player.energy} suffix={`/${player.energyMax}`} color={palette.energy} />
         </View>
 
+        {/* instant search — filters the live registry, no navigation */}
+        <View style={styles.searchWrap}>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder={`Search ${games.length} games…`}
+            placeholderTextColor={palette.textFaint}
+            style={styles.search}
+            autoCorrect={false}
+            autoCapitalize="none"
+            accessibilityLabel="Search games"
+          />
+          {query ? (
+            <PressableScale onPress={() => setQuery('')} scaleTo={0.9} style={styles.searchClear}>
+              <Text variant="caption" muted>
+                ✕
+              </Text>
+            </PressableScale>
+          ) : null}
+        </View>
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -133,6 +188,10 @@ export default function PlayScreen() {
             </PressableScale>
           ))}
         </ScrollView>
+
+        {visible.length === 0 ? (
+          <EmptyState glyph="🔍" title="Nothing matches" subtitle="Try a different search or filter." />
+        ) : null}
 
         {quickPicks.length ? (
           <View style={{ gap: spacing.sm }}>
@@ -197,7 +256,7 @@ export default function PlayScreen() {
             style={styles.heroWrap}
           >
             <LinearGradient
-              colors={['#16337F', '#2E7BD6', '#0B0F22']}
+              colors={[`${flagship.meta.accent}E6`, `${flagship.meta.accent}55`, '#0B0F22']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFill}
@@ -205,8 +264,8 @@ export default function PlayScreen() {
             <Shimmer width={width} duration={3200} />
             <View style={styles.heroRow}>
               <View style={{ flex: 1, gap: 3 }}>
-                <Text variant="micro" color="#A9E7FF">
-                  FEATURED · NEW
+                <Text variant="micro" color={palette.cyan}>
+                  FEATURED · FLAGSHIP
                 </Text>
                 <Text variant="title" numberOfLines={1}>
                   {flagship.meta.title}
@@ -214,23 +273,66 @@ export default function PlayScreen() {
                 <Text variant="caption" color="rgba(233,244,255,0.82)" numberOfLines={2}>
                   {flagship.meta.tagline}
                 </Text>
-                <Text variant="micro" color="#A9E7FF" style={{ marginTop: spacing.xs }}>
+                <Text variant="micro" color={palette.cyan} style={{ marginTop: spacing.xs }}>
                   {flagship.meta.energyCost} ⚡ per run
-                  {bests[flagship.id] ? ` · best ${Math.round(bests[flagship.id])}` : ''}
+                  {frontier?.runs
+                    ? ` · best ${frontier.bestScore} · ${fmtClock(frontier.bestTime)} · ${frontier.bossesDefeated.length} boss${frontier.bossesDefeated.length === 1 ? '' : 'es'}`
+                    : bests[flagship.id]
+                      ? ` · best ${Math.round(bests[flagship.id])}`
+                      : ''}
                 </Text>
               </View>
               <SpriteView
-                sprite={spriteForGame(flagship.id, '#A9E7FF', flagship.meta.title)}
+                sprite={spriteForGame(flagship.id, palette.cyan, flagship.meta.title)}
                 size={66}
                 label={flagship.meta.title}
               />
             </View>
             <View style={styles.heroCta}>
               <Text variant="label" color="#07111F">
-                ▶ PLAY
+                ▶ {frontier?.runs ? 'PLAY AGAIN' : 'PLAY'}
               </Text>
             </View>
           </PressableScale>
+        ) : null}
+
+        {recent.length ? (
+          <View style={{ gap: spacing.sm }}>
+            <SectionHeader
+              title="Continue playing"
+              subtitle="Straight back into your last runs"
+            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.recentRow}
+            >
+              {recent.map((g) => {
+                const locked = player.level < g.meta.minLevel;
+                return (
+                  <PressableScale
+                    key={g.id}
+                    onPress={() => (locked ? haptics.warn() : router.push(`/game/${g.id}`))}
+                    scaleTo={0.94}
+                    haptic="select"
+                    style={styles.recentCard}
+                  >
+                    <LinearGradient
+                      colors={[`${g.meta.accent}33`, 'rgba(10,10,20,0.9)']}
+                      style={StyleSheet.absoluteFill}
+                    />
+                    <SpriteView sprite={spriteForGame(g.id, g.meta.accent, g.meta.title)} size={34} label={g.meta.title} />
+                    <Text variant="label" numberOfLines={1}>
+                      {g.meta.title}
+                    </Text>
+                    <Text variant="micro" color={bests[g.id] ? palette.gold : palette.textMuted} numberOfLines={1}>
+                      {bests[g.id] ? `★ ${Math.round(bests[g.id])}` : g.meta.kind === 'ambient' ? 'Tap to visit' : 'Run it again'}
+                    </Text>
+                  </PressableScale>
+                );
+              })}
+            </ScrollView>
+          </View>
         ) : null}
 
         {sections.map((section) => (
@@ -275,7 +377,7 @@ export default function PlayScreen() {
         ))}
 
         <Card variant="glass" style={{ marginTop: spacing.lg }} padding={spacing.lg}>
-          <Text variant="subheading">One world, ten doors</Text>
+          <Text variant="subheading">One world, {games.length} doors</Text>
           <Text variant="caption" muted style={{ marginTop: spacing.xs }}>
             Coins, XP, items, cosmetics and achievements are shared across every game.
             Scrap from a zombie run buys a shotgun upgrade; a hat bought with fishing
@@ -285,6 +387,11 @@ export default function PlayScreen() {
       </ScrollView>
     </Screen>
   );
+}
+
+function fmtClock(seconds: number) {
+  const s = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 function GameCard({
@@ -404,6 +511,26 @@ function GameCard({
 const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: spacing.lg },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  searchWrap: { position: 'relative' },
+  search: {
+    height: 46,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingRight: spacing.xl * 2,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: palette.hairline,
+    color: palette.text,
+    fontSize: 15,
+  },
+  searchClear: {
+    position: 'absolute',
+    right: spacing.md,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+  },
   filters: { gap: spacing.sm, paddingRight: spacing.lg },
   quickRow: { gap: spacing.md, paddingRight: spacing.lg },
   quickCard: {
@@ -414,6 +541,18 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     gap: 3,
     justifyContent: 'flex-start',
+  },
+  recentRow: { gap: spacing.sm, paddingRight: spacing.lg },
+  recentCard: {
+    width: 128,
+    minHeight: 108,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: palette.hairline,
+    overflow: 'hidden',
+    gap: 3,
+    justifyContent: 'center',
   },
   filterChip: {
     paddingHorizontal: spacing.md,

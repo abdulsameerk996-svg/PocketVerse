@@ -42,7 +42,7 @@
       "shortName": "PocketVerse",
       "themeColor": "#08080F",
       "backgroundColor": "#08080F",
-      "description": "Eleven games, one avatar, one inventory, one save file. Offline-first, no account, no network."
+      "description": "Twenty-eight games, one avatar, one inventory, one save file. Offline-first, no account, no network."
     },
     "plugins": [
       "expo-router",
