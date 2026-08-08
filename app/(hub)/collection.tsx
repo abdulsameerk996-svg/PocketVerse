@@ -17,6 +17,7 @@ import {
   Screen,
   SectionHeader,
   Sheet,
+  SpriteView,
   Text,
   haptics,
   palette,
@@ -24,6 +25,8 @@ import {
   rarityColor,
   spacing,
   useResponsive,
+  spriteForIcon,
+  spriteForItem,
 } from '@/ui';
 
 const TABS: { id: 'bag' | 'cosmetics' | 'trophies'; label: string; glyph: string }[] = [
@@ -97,7 +100,11 @@ export default function CollectionScreen() {
               haptic="select"
               style={[styles.tab, tab === t.id && styles.tabActive]}
             >
-              <Text size={15}>{t.glyph}</Text>
+              <SpriteView
+                sprite={spriteForIcon(t.glyph, t.label, tab === t.id ? palette.violet : palette.textMuted)}
+                size={16}
+                label={t.label}
+              />
               <Text variant="caption" color={tab === t.id ? palette.text : palette.textMuted}>
                 {t.label}
               </Text>
@@ -188,7 +195,7 @@ function CollectionsTab({ tileSize }: { tileSize: number }) {
         return (
           <View key={source} style={{ marginBottom: spacing.xl }}>
             <SectionHeader
-              title={game ? `${game.meta.glyph} ${game.meta.title}` : source}
+              title={game ? game.meta.title : source}
               subtitle={`${found}/${items.length} discovered`}
             />
             <View style={styles.grid}>
@@ -228,7 +235,7 @@ function ItemSheet({ item, onClose }: { item: ItemDef | null; onClose: () => voi
     <Sheet visible onClose={onClose} title={item.name} subtitle={item.rarity.toUpperCase()}>
       <View style={styles.sheetHead}>
         <View style={[styles.sheetGlyph, { borderColor: color, backgroundColor: `${color}22` }]}>
-          <Text size={44}>{item.glyph}</Text>
+          <SpriteView sprite={spriteForItem(item)} size={52} label={item.name} />
         </View>
         <View style={{ flex: 1, gap: 4 }}>
           <Text variant="body" muted>

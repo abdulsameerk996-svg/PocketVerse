@@ -33,6 +33,7 @@ import {
   ProgressBar,
   Screen,
   SectionHeader,
+  SpriteView,
   StatChip,
   Text,
   useEntrance,
@@ -42,6 +43,9 @@ import {
   radius,
   spacing,
   useResponsive,
+  spriteForGame,
+  spriteForIcon,
+  spriteForLock,
 } from '@/ui';
 
 /**
@@ -224,7 +228,10 @@ export default function HomeScreen() {
                     {daily.available ? 'Tap to claim' : 'Claimed — come back tomorrow'}
                   </Text>
                 </View>
-                <Text size={30}>{DAILY_LADDER[daily.index].glyph}</Text>
+                <SpriteView
+                  sprite={spriteForIcon(DAILY_LADDER[daily.index].glyph, 'daily reward', palette.gold)}
+                  size={32}
+                />
               </View>
               <View style={styles.ladder}>
                 {DAILY_LADDER.map((d, i) => {
@@ -239,7 +246,10 @@ export default function HomeScreen() {
                         current && styles.ladderCurrent,
                       ]}
                     >
-                      <Text size={15}>{done ? '✓' : d.glyph}</Text>
+                      <SpriteView
+                        sprite={spriteForIcon(done ? '✅' : d.glyph, `day ${i + 1}`, palette.gold)}
+                        size={16}
+                      />
                       <Text variant="micro" faint>
                         {i + 1}
                       </Text>
@@ -338,7 +348,15 @@ export default function HomeScreen() {
                   colors={[`${g.meta.accent}44`, 'rgba(255,255,255,0.02)']}
                   style={StyleSheet.absoluteFill}
                 />
-                <Text size={34}>{locked ? '🔒' : g.meta.glyph}</Text>
+                {locked ? (
+                  <SpriteView sprite={spriteForLock(`${g.meta.title} locked`)} size={34} />
+                ) : (
+                  <SpriteView
+                    sprite={spriteForGame(g.id, g.meta.accent, g.meta.title)}
+                    size={40}
+                    label={g.meta.title}
+                  />
+                )}
                 <Text variant="label" numberOfLines={1}>
                   {g.meta.title}
                 </Text>
@@ -377,7 +395,11 @@ export default function HomeScreen() {
           {activity.length ? (
             activity.map((a, i) => (
               <View key={a.id} style={[styles.activityRow, i > 0 && styles.activityDivider]}>
-                <Text size={17}>{a.icon ?? '•'}</Text>
+                <SpriteView
+                  sprite={spriteForIcon(a.icon ?? '•', a.label, palette.textMuted)}
+                  size={16}
+                  label={a.label}
+                />
                 <View style={{ flex: 1 }}>
                   <Text variant="label" numberOfLines={1}>
                     {a.label}
@@ -442,7 +464,7 @@ function WorldTile({
 }) {
   return (
     <PressableScale onPress={onPress} scaleTo={0.94} style={styles.worldTile}>
-      <Text size={24}>{glyph}</Text>
+      <SpriteView sprite={spriteForIcon(glyph, title, tone)} size={26} label={title} />
       <Text variant="caption" numberOfLines={1}>
         {title}
       </Text>
@@ -480,7 +502,11 @@ function QuestRow({
   return (
     <PressableScale onPress={onPress} scaleTo={0.985} style={styles.questRow}>
       <View style={[styles.questIcon, completed && { backgroundColor: 'rgba(52,226,168,0.2)' }]}>
-        <Text size={17}>{completed ? '✅' : icon}</Text>
+        <SpriteView
+          sprite={spriteForIcon(completed ? '✅' : icon, title, completed ? palette.mint : palette.violet)}
+          size={18}
+          label={title}
+        />
       </View>
       <View style={{ flex: 1 }}>
         <Text variant="label" numberOfLines={1}>

@@ -14,6 +14,7 @@ import { getItem } from '@/content/catalog';
 import { palette, radius, shadow } from '../theme/tokens';
 import { Text } from './Text';
 import { useSettingsStore } from '@/core/state/settingsStore';
+import { SpriteView, spriteForFace, spriteForItem } from '../assets';
 
 export type AvatarViewProps = {
   avatar: AvatarConfig;
@@ -138,18 +139,18 @@ export const AvatarView = memo(function AvatarView({
 
       {/* hat */}
       {hat && hat.id !== 'hat_none' ? (
-        <Text
-          size={size * 0.36}
-          style={[styles.hat, { top: -size * 0.16, transform: [{ rotate: '-8deg' }] }]}
-        >
-          {hat.glyph}
-        </Text>
+        <SpriteView
+          sprite={spriteForItem(hat)}
+          size={size * 0.52}
+          label={hat.name}
+          style={[styles.hat, { top: -size * 0.15, transform: [{ rotate: '-8deg' }] }]}
+        />
       ) : null}
 
       {/* pet companion */}
       {showPet && pet ? (
         <View style={[styles.pet, { width: size * 0.34, height: size * 0.34, borderRadius: size }]}>
-          <Text size={size * 0.2}>{pet.glyph}</Text>
+          <SpriteView sprite={spriteForItem(pet)} size={size * 0.26} label={pet.name} />
         </View>
       ) : null}
 
@@ -201,9 +202,11 @@ const ProceduralFace = memo(function ProceduralFace({
           marginBottom: size * 0.12,
         }}
       >
-        <Text size={size * 0.15} weight="700" color="#2B1A2E">
-          {FACES[avatar.faceId] ?? FACES.face_calm}
-        </Text>
+        <SpriteView
+          sprite={spriteForFace(avatar.faceId, avatar.skinTone)}
+          size={size * 0.6}
+          label={FACES[avatar.faceId] ?? FACES.face_calm}
+        />
       </View>
     </View>
   );

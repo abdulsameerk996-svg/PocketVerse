@@ -6,6 +6,7 @@ import { palette, radius, rarityColor, shadow, spacing } from '../theme/tokens';
 import { Text } from './Text';
 import { PressableScale } from './PressableScale';
 import { Shimmer } from '../fx/Shimmer';
+import { SpriteView, spriteForItem, spriteForLock } from '../assets';
 
 export type ItemTileProps = {
   item: ItemDef;
@@ -67,9 +68,15 @@ export const ItemTile = memo(function ItemTile({
         />
         {legendary && !locked ? <Shimmer width={size} duration={2800} /> : null}
 
-        <Text size={size * 0.4} style={locked ? styles.locked : undefined}>
-          {locked ? '🔒' : item.glyph}
-        </Text>
+        {locked ? (
+          <SpriteView sprite={spriteForLock(`${item.name} locked`)} size={size * 0.34} />
+        ) : (
+          <SpriteView
+            sprite={spriteForItem(item)}
+            size={size * 0.56}
+            label={item.name}
+          />
+        )}
 
         {qty != null && qty > 1 ? (
           <View style={styles.qty}>

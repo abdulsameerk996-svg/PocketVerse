@@ -9,6 +9,7 @@ import type { GameCategory } from '@/core/registry';
 import { gradients } from '@/ui/theme/tokens';
 import { usePlayerStore } from '@/core/state/playerStore';
 import { scoreRepo } from '@/core/db/repositories';
+import { SpriteView, spriteForGame, spriteForLock } from '@/ui/assets';
 import {
   Card,
   PressableScale,
@@ -127,9 +128,9 @@ export default function PlayScreen() {
                     key={g.id}
                     index={i}
                     width={cardW}
+                    gameId={g.id}
                     title={g.meta.title}
                     tagline={g.meta.tagline}
-                    glyph={g.meta.glyph}
                     accent={g.meta.accent}
                     gradient={gradients[g.meta.gradient]}
                     energy={g.meta.energyCost}
@@ -170,9 +171,9 @@ export default function PlayScreen() {
 function GameCard({
   index,
   width,
+  gameId,
   title,
   tagline,
-  glyph,
   accent,
   gradient,
   energy,
@@ -187,9 +188,9 @@ function GameCard({
 }: {
   index: number;
   width: number;
+  gameId: string;
   title: string;
   tagline: string;
-  glyph: string;
   accent: string;
   gradient: readonly [string, string, ...string[]];
   energy: number;
@@ -220,7 +221,11 @@ function GameCard({
         {!locked && kind === 'ambient' ? <Shimmer width={width} duration={3600} /> : null}
 
         <View style={styles.cardTop}>
-          <Text size={36}>{locked ? '🔒' : glyph}</Text>
+          {locked ? (
+            <SpriteView sprite={spriteForLock(`${title} locked`)} size={38} />
+          ) : (
+            <SpriteView sprite={spriteForGame(gameId, accent, title)} size={44} label={title} />
+          )}
           {players === 2 ? (
             <View style={[styles.tag, { borderColor: `${accent}88` }]}>
               <Text variant="micro" color={accent}>

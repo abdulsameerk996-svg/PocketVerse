@@ -22,6 +22,7 @@ import {
   ProgressBar,
   PressableScale,
   Sheet,
+  SpriteView,
   Text,
   haptics,
   palette,
@@ -29,6 +30,9 @@ import {
   spacing,
   useResponsive,
   play,
+  spriteForEntity,
+  spriteForIcon,
+  spriteForItem,
 } from '@/ui';
 import { useKeyAxis } from '@/ui/hooks/useKeyboard';
 import {
@@ -49,8 +53,6 @@ const POOL = ZOMBIES + BULLETS + PICKUPS;
 const Z0 = 0;
 const B0 = ZOMBIES;
 const P0 = ZOMBIES + BULLETS;
-
-const ZOMBIE_GLYPHS = ['🧟', '🧟‍♂️', '🧟‍♀️'];
 
 /**
  * ZOMBIE SURVIVAL
@@ -532,7 +534,7 @@ export function ZombieSurface({
         />
 
         {Array.from({ length: POOL }, (_, i) => (
-          <ZEntity key={i} index={i} pool={pool} frame={frame} />
+          <ZEntity key={i} index={i} pool={pool} frame={frame} size={i < B0 ? zombieSize : pickupSize} />
         ))}
 
         <Animated.View
@@ -551,7 +553,7 @@ export function ZombieSurface({
               { width: playerR * 2.1, height: playerR * 2.1, borderRadius: playerR * 1.4 },
             ]}
           />
-          <Text size={playerR * 1.4}>🧑‍🚀</Text>
+          <SpriteView sprite={spriteForEntity('player')} size={playerR * 2} label="player" />
         </Animated.View>
 
         <BurstLayer handle={bursts} />
@@ -572,7 +574,7 @@ export function ZombieSurface({
               </View>
               <LiveValue value={kills} variant="title" format={(v) => `${Math.floor(v)} kills`} />
               <View style={styles.scrapRow}>
-                <Text size={11}>🔩</Text>
+                <SpriteView sprite={spriteForEntity('scrap')} size={12} label="scrap" />
                 <LiveValue
                   value={scrapCollected}
                   variant="micro"
@@ -582,7 +584,19 @@ export function ZombieSurface({
               </View>
             </View>
           }
-          right={<Text size={16}>{weapon.glyph}</Text>}
+          right={
+            <SpriteView
+              sprite={spriteForItem({
+                id: weapon.id,
+                kind: 'weapon',
+                rarity: 'epic',
+                glyph: weapon.glyph,
+                name: weapon.name,
+              })}
+              size={18}
+              label={weapon.name}
+            />
+          }
         />
 
         <View style={styles.hpBar}>
@@ -616,14 +630,16 @@ const ZEntity = React.memo(function ZEntity({
   index,
   pool,
   frame,
+  size,
 }: {
   index: number;
   pool: SharedValue<PooledEntity[]>;
   frame: SharedValue<number>;
+  /** Static sprite render size — resolved on the JS thread, never per-frame. */
+  size: number;
 }) {
   const isZombie = index < B0;
   const isBullet = index >= B0 && index < P0;
-  const glyph = isZombie ? ZOMBIE_GLYPHS[index % 3] : isBullet ? '' : '🔩';
 
   const style = useAnimatedStyle(() => {
     frame.value;
@@ -648,7 +664,7 @@ const ZEntity = React.memo(function ZEntity({
       <Animated.View pointerEvents="none" style={[styles.entity, style]}>
         <View style={styles.scrapGlow} />
         <View style={styles.scrapRing} />
-        <Text size={15}>{glyph}</Text>
+        <SpriteView sprite={spriteForEntity('scrap')} size={size} label="scrap" />
       </Animated.View>
     );
   }
@@ -656,7 +672,7 @@ const ZEntity = React.memo(function ZEntity({
   return (
     <Animated.View pointerEvents="none" style={[styles.entity, style]}>
       <View style={styles.zombieShadow} />
-      <Text size={22}>{glyph}</Text>
+      <SpriteView sprite={spriteForEntity('zombie', index)} size={size} label="zombie" />
     </Animated.View>
   );
 });
@@ -743,7 +759,7 @@ const UpgradeSheet = React.memo(function UpgradeSheet({
             style={[styles.upgradeRow, maxed && { opacity: 0.5 }]}
             scaleTo={0.98}
           >
-            <Text size={22}>{u.glyph}</Text>
+            <SpriteView sprite={spriteForIcon(u.glyph, u.name, palette.violet)} size={24} label={u.name} />
             <View style={{ flex: 1 }}>
               <Text variant="subheading">
                 {u.name} · Lv {level}

@@ -1,5 +1,6 @@
 export * from './components';
 export * from './theme';
+export * from './assets';
 export * from './fx/Particles';
 export * from './fx/Confetti';
 export * from './fx/Shimmer';

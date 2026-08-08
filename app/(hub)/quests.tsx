@@ -15,11 +15,13 @@ import {
   ProgressBar,
   Screen,
   SectionHeader,
+  SpriteView,
   Text,
   haptics,
   palette,
   radius,
   spacing,
+  spriteForIcon,
 } from '@/ui';
 
 /**
@@ -111,7 +113,12 @@ export default function QuestsScreen() {
             <QuestCard key={`${q.def.id}:${q.progress.period}`} quest={q} onClaim={() => claim(q)} />
           ))
         ) : (
-          <EmptyState glyph="🏁" title="No milestones yet" subtitle="Keep levelling to unlock them." />
+          <EmptyState
+            glyph="🏁"
+            sprite={spriteForIcon('🏁', 'milestones', palette.gold)}
+            title="No milestones yet"
+            subtitle="Keep levelling to unlock them."
+          />
         )}
       </ScrollView>
     </Screen>
@@ -138,7 +145,11 @@ function QuestCard({ quest, onClaim }: { quest: ActiveQuest; onClaim: () => void
       >
         <View style={styles.cardHead}>
           <View style={[styles.icon, claimable && { backgroundColor: 'rgba(52,226,168,0.2)' }]}>
-            <Text size={19}>{progress.claimed ? '✓' : def.icon}</Text>
+            <SpriteView
+              sprite={spriteForIcon(progress.claimed ? '✅' : def.icon, def.title, claimable ? palette.mint : palette.violet)}
+              size={20}
+              label={def.title}
+            />
           </View>
           <View style={{ flex: 1 }}>
             <View style={styles.titleRow}>

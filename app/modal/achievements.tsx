@@ -12,10 +12,12 @@ import {
   ProgressBar,
   Screen,
   SectionHeader,
+  SpriteView,
   Text,
   palette,
   radius,
   spacing,
+  spriteForIcon,
 } from '@/ui';
 
 /**
@@ -77,7 +79,7 @@ export default function AchievementsModal() {
           return (
             <View key={gameId}>
               <SectionHeader
-                title={game ? `${game.meta.glyph} ${game.meta.title}` : gameId}
+                title={game ? game.meta.title : gameId}
                 subtitle={game?.meta.tagline}
               />
               {list.map((a) => (
@@ -119,7 +121,11 @@ function AchievementCard({
     <View style={[styles.card, complete && { borderColor: palette.gold }]}>
       <View style={styles.head}>
         <View style={[styles.icon, complete && { backgroundColor: 'rgba(255,197,61,0.2)' }]}>
-          <Text size={20}>{def.icon}</Text>
+          <SpriteView
+            sprite={spriteForIcon(def.icon, def.title, complete ? palette.gold : palette.violet)}
+            size={22}
+            label={def.title}
+          />
         </View>
         <View style={{ flex: 1 }}>
           <Text variant="subheading">{def.title}</Text>

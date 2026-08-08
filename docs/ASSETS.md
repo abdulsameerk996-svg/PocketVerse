@@ -9,24 +9,41 @@ single seam so they can be replaced without touching call sites.
 
 ## Art
 
-Every sprite in the game is an emoji glyph rendered through `<Text>`. Each one
-comes from either:
+PocketVerse renders every non-photographic mark through a single **generated
+sprite engine** — `src/ui/assets/sprites.ts` (pure TS) + `SpriteView.tsx`
+(react-native-svg). There are still **no binary assets**: every item, game
+thumbnail, quest/achievement icon, avatar face and pooled game entity is a set
+of vector shapes drawn deterministically from its id, so anything new gets
+coherent art the moment it is registered.
 
-- `ItemDef.glyph` in the catalog (items, cosmetics, fish, crops, cars, weapons),
-- `GameMeta.glyph` (arcade cards, HUDs, activity feed),
-- a module-local table (`RUNNER_SKINS`, `CARS`, `ZOMBIE_GLYPHS`, `BAND_VISUAL`).
+### How it works
 
-### Replacing with a sprite atlas
+- `spriteForItem(item)` — the catalog's ~95 items. Specific motifs are authored
+  per id where identity matters (materials, consumables, hats, shirts, shoes,
+  auras, backgrounds, decorations, pets, trails, weapons, cars, skins, pens,
+  toys); everything else falls back by `kind` (fish → fish, crop → sprout, …),
+  then by cosmetic slot, then to a hash-seeded generic mark. **It never returns
+  null.**
+- `spriteForGame(id, accent, label)` — one thumbnail per registered game, using
+  the module's own accent colour.
+- `spriteForIcon(emoji, label, accent)` — quest/achievement/HUD icons. Known
+  emoji map to the same motif library; unknown ones get the deterministic
+  fallback, so a new quest never shows a blank tile.
+- `spriteForFace(faceId)` — the six avatar faces as vector art.
+- `spriteForEntity(kind, variant)` — Last Signal's pooled zombies (hue variants
+  so a horde reads as individuals), scrap, player and bullets.
 
-1. Add `sprite?: ImageSourcePropType` alongside `glyph` in `ItemDef`
-   (`src/core/types.ts`) and in the module-local tables.
-2. Change the two components that render item art — `ItemTile` and `AvatarView` —
-   to prefer `sprite` and fall back to `glyph`.
-3. For pooled game entities, swap the `<Text>` inside the entity sprite component
-   for an `<Image>`; the animated style is unchanged because position and size
-   already come from the pool.
+### Replacing with real art
 
-Nothing else needs to change: no game reads a glyph directly from another game.
+The engine is a render-time mapping, so the data model (`ItemDef.glyph`,
+`GameMeta.glyph`) is untouched. To ship a real atlas instead, add
+`sprite?: ImageSourcePropType` alongside `glyph` and prefer it in the two
+components that draw items (`ItemTile`, `AvatarView`); pooled entities swap the
+`<SpriteView>` for an `<Image>` with the same static size prop — the animated
+style is unchanged because position already comes from the pool.
+
+`npm run sim:sprite` resolves every registered id in Node and verifies geometry
+(bounds, finite numbers, non-empty), determinism and the fallback chain.
 
 ---
 
