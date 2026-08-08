@@ -5,12 +5,15 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 
+import { getGame } from '@/core/registry';
+import { flush } from '@/core/save/saveService';
+import { bootstrap } from '@/core/services/boot';
+import { useSettingsStore } from '@/core/state/settingsStore';
 import { installGames } from '@/games';
 import { installSound } from '@/ui/hooks/soundBackend';
-import { bootstrap } from '@/core/services/boot';
-import { flush } from '@/core/save/saveService';
+import { playMusic, stopMusic } from '@/ui/hooks/useSound';
 import { CelebrationOverlay, MAX_FRAME_WIDTH, Toaster, palette } from '@/ui';
 import { BootScreen } from '@/ui/components/BootScreen';
 
@@ -42,6 +45,28 @@ if (Platform.OS !== 'web') {
  * No screen renders until boot resolves, so no screen ever has to handle a
  * half-hydrated store.
  */
+/**
+ * Decides what music should be playing and keeps it in sync with the route and
+ * the Music setting. The backends make replaying the same track a no-op, so
+ * hub→hub or hub→modal navigation never restarts the loop.
+ */
+function MusicDirector() {
+  const pathname = usePathname();
+  const musicOn = useSettingsStore((s) => s.settings.music);
+
+  useEffect(() => {
+    if (!musicOn) {
+      stopMusic();
+      return;
+    }
+    const match = pathname.match(/^\/game\/([^/]+)/);
+    const module = match ? getGame(match[1]) : undefined;
+    playMusic(module ? (module.meta.kind === 'ambient' ? 'chill' : 'action') : 'hub');
+  }, [pathname, musicOn]);
+
+  return null;
+}
+
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +122,7 @@ export default function RootLayout() {
           ) : (
             <BootScreen error={error} />
           )}
+          <MusicDirector />
           <Toaster />
           <CelebrationOverlay />
         </View>

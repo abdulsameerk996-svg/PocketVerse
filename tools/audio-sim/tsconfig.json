@@ -16,6 +16,7 @@
   },
   "files": [
     "../../src/ui/hooks/soundVoices.ts",
-    "../../src/ui/hooks/synthWav.ts"
+    "../../src/ui/hooks/synthWav.ts",
+    "../../src/ui/hooks/musicGen.ts"
   ]
 }

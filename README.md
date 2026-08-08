@@ -139,5 +139,5 @@ There is no server, and nothing is designed as if there might be one later:
 ## Status
 
 `npm run typecheck` passes and the project bundles with Metro. Audio ships as
-cue hooks rather than binaries — see [docs/ASSETS.md](docs/ASSETS.md) for how to
-make it audible without touching a single call site.
+cue hooks rather than binaries — sound effects and looping music are
+synthesised at runtime, see [docs/ASSETS.md](docs/ASSETS.md).

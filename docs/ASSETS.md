@@ -77,6 +77,18 @@ player.seekTo(0).then(() => player.play());
 through the same sink, which is the entire reason the cues were written before
 the audio existed.
 
+### Music
+
+`playMusic` drives generated, seamlessly looping ambient tracks — `hub`,
+`action` and `chill` — composed by `src/ui/hooks/musicGen.ts` (pure TS) and
+rendered to WAV with the same synthesis primitives as the cues. The root
+layout's `MusicDirector` picks the track from the current route (hub and modals
+→ `hub`, session games → `action`, ambient games → `chill`), and the Music
+setting in the app stops it. Web plays the WAV through a looping
+`AudioBufferSourceNode`; native through a looping `expo-audio` player.
+`npm run sim:audio` verifies structure, duration, amplitude and loop-seam
+continuity for every track, so a retune of `musicGen.ts` is caught in Node.
+
 ### Cue inventory
 
 | Cue | Fired by |

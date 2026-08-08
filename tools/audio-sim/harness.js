@@ -10,6 +10,7 @@
  */
 const { renderWav, WAV_SAMPLE_RATE } = require('./build/ui/hooks/synthWav.js');
 const { VOICES } = require('./build/ui/hooks/soundVoices.js');
+const { renderTrack, MUSIC_TRACK_IDS } = require('./build/ui/hooks/musicGen.js');
 
 // Must match the `SoundCue` union in src/ui/hooks/useSound.ts exactly.
 const EXPECTED_CUES = [
@@ -82,6 +83,34 @@ const b2 = renderWav('game.crash');
 let same = a.bytes.length === b2.bytes.length;
 if (same) for (let i = 0; i < a.bytes.length; i++) if (a.bytes[i] !== b2.bytes[i]) { same = false; break; }
 check('noise cue renders identically each time', same);
+
+console.log('\nMusic tracks');
+const TRACK_DURATIONS = { hub: [9, 16], action: [5, 12], chill: [11, 18] };
+for (const id of MUSIC_TRACK_IDS) {
+  const w = renderTrack(id);
+  const b = w.bytes;
+  check(`${id}: RIFF/WAVE magic`, magic(b, 0, 'RIFF') && magic(b, 8, 'WAVE'));
+  check(
+    `${id}: PCM mono 16-bit @22050`,
+    u16(b, 20) === 1 && u16(b, 22) === 1 && u32(b, 24) === WAV_SAMPLE_RATE && u16(b, 34) === 16
+  );
+  const [minD, maxD] = TRACK_DURATIONS[id];
+  check(`${id}: duration in range`, w.duration >= minD && w.duration <= maxD, `${w.duration.toFixed(2)}s`);
+  check(`${id}: audible`, w.peak > 0.01, `peak ${w.peak.toFixed(3)}`);
+  check(`${id}: no clipping`, w.peak <= 0.999, `peak ${w.peak.toFixed(3)}`);
+  check(`${id}: has energy`, w.rms > 0.001, `rms ${w.rms.toFixed(4)}`);
+  // Loop seam: both ends must fade to silence so the loop point never clicks.
+  let head = 0;
+  for (let i = 0; i < 100; i++) head = Math.max(head, Math.abs(w.samples[i]));
+  let tail = 0;
+  for (let i = Math.max(0, w.samples.length - 100); i < w.samples.length; i++) tail = Math.max(tail, Math.abs(w.samples[i]));
+  check(`${id}: seamless loop (quiet ends)`, head < 0.01 && tail < 0.01, `head ${head.toFixed(4)} tail ${tail.toFixed(4)}`);
+  const again = renderTrack(id);
+  let same = again.bytes.length === b.length;
+  if (same) for (let i = 0; i < b.length; i++) if (again.bytes[i] !== b[i]) { same = false; break; }
+  check(`${id}: deterministic`, same);
+  console.log(`        ${id}: ${w.duration.toFixed(2)}s, ${b.length} bytes, peak ${w.peak.toFixed(3)}, rms ${w.rms.toFixed(4)}`);
+}
 
 console.log(failures === 0 ? '\nALL AUDIO CHECKS PASSED' : `\n${failures} AUDIO CHECK(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

@@ -8,6 +8,10 @@ import { getSettings } from '@/core/state/settingsStore';
  * and the platform backends (web: WebAudio synthesis; native: runtime WAV
  * synthesis via expo-audio) register a sink here at boot — so no call site
  * ever touches audio internals.
+ *
+ * Music follows the same seam: the platform backends register a music sink and
+ * loop generated tracks (`musicGen.ts`) that the root layout's MusicDirector
+ * picks per screen.
  */
 
 export type SoundCue =
@@ -40,17 +44,34 @@ export function setSoundSink(next: Sink | null) {
 }
 
 export function play(cue: SoundCue, opts?: { volume?: number; rate?: number }) {
-  const s = getSettings();
-  if (!s.sound) return;
+  if (!getSettings().sound) return;
   sink?.(cue, opts);
 }
 
-export function playMusic(track: string) {
-  if (!getSettings().music) return;
-  sink?.(`music.${track}` as SoundCue);
+/* ------------------------------------------------------------- music -- */
+
+export type MusicTrack = 'hub' | 'action' | 'chill';
+
+/** `null` stops the current track. */
+type MusicSink = (track: MusicTrack | null) => void;
+
+let musicSink: MusicSink | null = null;
+
+/** Wire the platform music backend at boot (same lifecycle as the sound sink). */
+export function setMusicSink(next: MusicSink | null) {
+  musicSink = next;
 }
 
-export const sfx = { play, playMusic };
+export function playMusic(track: MusicTrack) {
+  if (!getSettings().music) return;
+  musicSink?.(track);
+}
+
+export function stopMusic() {
+  musicSink?.(null);
+}
+
+export const sfx = { play, playMusic, stopMusic };
 
 export function useSound() {
   return sfx;

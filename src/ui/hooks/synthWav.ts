@@ -76,8 +76,8 @@ function bandpass(data: Float64Array, freq: number, q: number, sampleRate: numbe
   }
 }
 
-/** Waveform shapes from a phase in radians — matches WebAudio's oscillators. */
-function shape(wave: 'sine' | 'square' | 'triangle' | 'sawtooth', phase: number): number {
+/** Waveform shapes from a phase in radians — matches WebAudio's oscillators. Shared with musicGen. */
+export function shape(wave: 'sine' | 'square' | 'triangle' | 'sawtooth', phase: number): number {
   switch (wave) {
     case 'square':
       return Math.sin(phase) >= 0 ? 1 : -1;
@@ -92,7 +92,8 @@ function shape(wave: 'sine' | 'square' | 'triangle' | 'sawtooth', phase: number)
   }
 }
 
-function wavBytes(samples: Float64Array, sampleRate: number): Uint8Array {
+/** Encode Float64 samples to a RIFF/WAVE file (16-bit PCM, mono). Shared with musicGen. */
+export function wavBytes(samples: Float64Array, sampleRate: number): Uint8Array {
   const n = samples.length;
   const bytes = new Uint8Array(44 + n * 2);
   const dv = new DataView(bytes.buffer);

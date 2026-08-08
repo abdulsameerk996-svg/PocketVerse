@@ -1,5 +1,6 @@
-import { setSoundSink } from './useSound';
+import { setMusicSink, setSoundSink, type MusicTrack } from './useSound';
 import { MIX, VOICES } from './soundVoices';
+import { renderTrack } from './musicGen';
 
 /**
  * ============================================================================
@@ -13,17 +14,22 @@ import { MIX, VOICES } from './soundVoices';
  * hundred bytes of code instead of a megabyte of samples. The cue table itself
  * lives in `soundVoices.ts`, shared with the native backend.
  *
- * This plugs into the existing `setSoundSink` seam. Not one `play()` call site
- * changes, which is the entire reason those cues were written before the audio
- * existed.
+ * Music is generated too: `musicGen.ts` renders a seamless looping WAV per
+ * track, which is decoded and looped through the same context.
+ *
+ * This plugs into the existing `setSoundSink` / `setMusicSink` seams. Not one
+ * `play()` call site changes, which is the entire reason those cues were
+ * written before the audio existed.
  *
  * Constraints this respects:
  *   · Browsers refuse to start an AudioContext before a user gesture, so the
  *     context is created lazily and resumed on the first real interaction.
+ *     Music requested before then is held (`pendingMusic`) and started on the
+ *     first gesture.
  *   · Nodes are created per cue and disposed on `ended` — a game fires hundreds
  *     of these per run and leaking oscillators would eventually stall the tab.
- *   · The Sound setting is honoured upstream in `useSound.play`, so there is no
- *     second settings check here.
+ *   · The Sound/Music settings are honoured upstream in `useSound`, so there is
+ *     no second settings check here.
  */
 
 let ctx: AudioContext | null = null;
@@ -63,7 +69,15 @@ function armOnFirstGesture() {
   const resume = () => {
     const c = audio();
     if (c && c.state === 'suspended') void c.resume();
-    if (c && c.state === 'running') detach();
+    if (c && c.state === 'running') {
+      detach();
+      // Music may have been requested before the gesture — start it now.
+      if (pendingMusic) {
+        const track = pendingMusic;
+        pendingMusic = null;
+        startMusic(track);
+      }
+    }
   };
   const detach = () => {
     window.removeEventListener('pointerdown', resume);
@@ -80,6 +94,63 @@ function ramp(param: AudioParam, peak: number, now: number, duration: number, at
   param.setValueAtTime(0.0001, now);
   param.exponentialRampToValueAtTime(Math.max(peak, 0.0002), now + attackTime);
   param.exponentialRampToValueAtTime(0.0001, now + duration);
+}
+
+/* ------------------------------------------------------------- music -- */
+
+const MUSIC_GAIN = 0.5;
+let activeMusic: MusicTrack | null = null;
+let musicSeq = 0;
+let musicNode: GainNode | null = null;
+let pendingMusic: MusicTrack | null = null;
+
+function stopMusicNode() {
+  if (musicNode) {
+    try {
+      musicNode.disconnect();
+    } catch {
+      // already gone
+    }
+    musicNode = null;
+  }
+  activeMusic = null;
+}
+
+function startMusic(track: MusicTrack) {
+  const c = audio();
+  if (!c || !master) return;
+  if (c.state !== 'running') {
+    // Hold until the first gesture resumes the context.
+    pendingMusic = track;
+    void c.resume();
+    return;
+  }
+  if (activeMusic === track && musicNode) return; // same track already looping
+
+  const dest = master; // non-null capture — the decode completes asynchronously
+  const seq = ++musicSeq;
+  const wav = renderTrack(track);
+  const arrayBuf = wav.bytes.buffer.slice(
+    wav.bytes.byteOffset,
+    wav.bytes.byteOffset + wav.bytes.byteLength,
+  ) as ArrayBuffer;
+  c.decodeAudioData(arrayBuf)
+    .then((buffer) => {
+      if (seq !== musicSeq) return; // superseded while decoding
+      stopMusicNode();
+      const src = c.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+      const g = c.createGain();
+      g.gain.value = MUSIC_GAIN;
+      src.connect(g).connect(dest);
+      src.start();
+      musicNode = g;
+      activeMusic = track;
+    })
+    .catch(() => {
+      // Decode failure — stay silent rather than crash the app.
+    });
 }
 
 export function installSound() {
@@ -156,5 +227,15 @@ export function installSound() {
       for (const osc of tones) osc.disconnect();
       noise?.disconnect();
     };
+  });
+
+  setMusicSink((track) => {
+    if (!track) {
+      musicSeq++;
+      pendingMusic = null;
+      stopMusicNode();
+      return;
+    }
+    startMusic(track);
   });
 }

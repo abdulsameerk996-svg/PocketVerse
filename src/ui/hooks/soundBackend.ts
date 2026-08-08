@@ -1,7 +1,8 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
-import { setSoundSink, type SoundCue } from './useSound';
+import { setMusicSink, setSoundSink, type MusicTrack, type SoundCue } from './useSound';
 import { renderWav } from './synthWav';
+import { renderTrack } from './musicGen';
 
 /**
  * Audio backend — native.
@@ -10,18 +11,19 @@ import { renderWav } from './synthWav';
  * built-in synthesiser while the phone does not. So this backend renders each
  * cue to a small 16-bit PCM WAV with the *same* voice math the web backend uses
  * (`synthWav.ts`), writes it to the app cache the first time it is heard, and
- * plays it through expo-audio.
+ * plays it through expo-audio. Music is generated the same way (`musicGen.ts`)
+ * and looped by a single dedicated player.
  *
- * This plugs into the same `setSoundSink` seam as the web backend — not one
- * `play()` call site changes.
+ * This plugs into the same `setSoundSink` / `setMusicSink` seams as the web
+ * backend — not one `play()` call site changes.
  *
  * Constraints this respects:
  *   · `rate` is baked into the WAV (duration + pitch), matching the web
  *     backend's behaviour instead of expo-audio's pitch-preserving rate change.
  *   · Players are created once per (cue, rate) variant and reused — a game
  *     fires hundreds of cues per run and churning players would stutter.
- *   · The Sound setting is honoured upstream in `useSound.play`, so there is no
- *     second settings check here.
+ *   · The Sound/Music settings are honoured upstream in `useSound`, so there is
+ *     no second settings check here.
  */
 
 /** Cached player per (cue, rate) variant; the promise dedupes a burst of plays. */
@@ -75,6 +77,22 @@ function playerFor(cue: SoundCue, rate: number): Promise<AudioPlayer> {
   return pending;
 }
 
+/* ------------------------------------------------------------- music -- */
+
+const MUSIC_VOLUME = 0.55;
+let musicPlayer: AudioPlayer | null = null;
+let currentTrack: MusicTrack | null = null;
+let musicSeq = 0;
+
+async function musicFileUri(track: MusicTrack): Promise<string> {
+  const { bytes } = renderTrack(track);
+  const uri = `${await audioDir()}music-${track}.wav`;
+  await FileSystem.writeAsStringAsync(uri, toBase64(bytes), {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  return uri;
+}
+
 export function installSound() {
   // SFX should never take over the session or the device's other audio.
   void setAudioModeAsync({
@@ -90,6 +108,38 @@ export function installSound() {
         player.volume = Math.min(1, Math.max(0, opts?.volume ?? 1));
         // seekTo(0) then play: retriggering a finished clip starts cleanly.
         return player.seekTo(0).then(() => player.play());
+      })
+      .catch(() => {
+        // Synthesis or disk failure — stay silent rather than crash the game.
+      });
+  });
+
+  setMusicSink((track) => {
+    if (!track) {
+      musicSeq++;
+      currentTrack = null;
+      if (musicPlayer) {
+        musicPlayer.pause();
+        musicPlayer.seekTo(0).catch(() => {});
+      }
+      return;
+    }
+    // Same track already looping — nothing to do (hub→hub navigation).
+    if (currentTrack === track && musicPlayer?.playing) return;
+
+    const seq = ++musicSeq;
+    void musicFileUri(track)
+      .then((uri) => {
+        if (seq !== musicSeq) return; // superseded while rendering/writing
+        if (!musicPlayer) {
+          musicPlayer = createAudioPlayer({ uri });
+        } else {
+          musicPlayer.replace({ uri });
+        }
+        musicPlayer.loop = true;
+        musicPlayer.volume = MUSIC_VOLUME;
+        currentTrack = track;
+        musicPlayer.play();
       })
       .catch(() => {
         // Synthesis or disk failure — stay silent rather than crash the game.

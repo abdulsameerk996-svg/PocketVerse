@@ -77,8 +77,8 @@ export default function SettingsModal() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <SectionHeader title="Feel" />
-        <ToggleRow label="Sound effects" glyph="🔊" value={settings.sound} onChange={() => toggle('sound')} description="Cue hooks are wired; audio files ship separately." />
-        <ToggleRow label="Music" glyph="🎶" value={settings.music} onChange={() => toggle('music')} />
+        <ToggleRow label="Sound effects" glyph="🔊" value={settings.sound} onChange={() => toggle('sound')} description="Synthesised on device — no audio files shipped." />
+        <ToggleRow label="Music" glyph="🎶" value={settings.music} onChange={() => toggle('music')} description="Generated ambient loops, one mood per screen." />
         <ToggleRow label="Haptics" glyph="📳" value={settings.haptics} onChange={() => toggle('haptics')} />
 
         <SectionHeader title="Accessibility" />
