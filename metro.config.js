@@ -15,6 +15,21 @@ const config = getDefaultConfig(__dirname);
 config.resolver.assetExts.push('wasm');
 
 /**
+ * Assets imported from inside packages ship under `node_modules`-nested URLs
+ * (e.g. `/assets/node_modules/expo-sqlite/web/wa-sqlite/wa-sqlite.<hash>.wasm`),
+ * which Cloudflare Pages does not serve — the SPA fallback answers with the
+ * HTML shell, killing the SQLite worker with a WebAssembly magic-word error
+ * and breaking images. `tools/relocate-node-modules-assets.js` moves such
+ * assets to the root-level `/assets/` directory and keeps every bundle
+ * reference in sync (see that file for the full reasoning).
+ */
+config.transformer = config.transformer ?? {};
+config.transformer.assetPlugins = [
+  ...(config.transformer.assetPlugins ?? []),
+  require.resolve('./tools/relocate-node-modules-assets.js'),
+];
+
+/**
  * The same SQLite worker uses `SharedArrayBuffer` on its synchronous code path,
  * which browsers only expose to cross-origin-isolated documents. The dev server
  * has to send the isolation headers or the database fails to open on web.

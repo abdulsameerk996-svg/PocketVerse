@@ -29,6 +29,13 @@
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
+# The SQLite WASM module must never be served as HTML. Cloudflare's default
+# MIME map already maps .wasm to application/wasm, but pin it explicitly so a
+# wrong Content-Type can never break WebAssembly.instantiateStreaming.
+/assets/*.wasm
+  Content-Type: application/wasm
+  Cache-Control: public, max-age=31536000, immutable
+
 # The shell and the worker must never be served stale, or a deploy cannot
 # take effect until the cache expires.
 /index.html
