@@ -9,11 +9,13 @@ import {
   Card,
   PressableScale,
   SectionHeader,
+  SpriteView,
   Text,
   haptics,
   palette,
   radius,
   spacing,
+  spriteForIcon,
   useResponsive,
 } from '@/ui';
 import { ColourMatch, MeteorDodge, ReflexGrid, TapRush } from './challenges';
@@ -212,7 +214,16 @@ const ChallengeRow = React.memo(function ChallengeRow({
   return (
     <PressableScale onPress={onPress} style={styles.row} scaleTo={0.975}>
       <LinearGradient colors={challenge.colors} style={styles.art}>
-        <Text size={26}>{challenge.glyph}</Text>
+        {/*
+          Vector badge via the shared sprite system rather than a raw emoji
+          glyph — reads crisp at any size and can never render as a broken
+          image or a corrupted byte string (the original Reflex Grid art).
+        */}
+        <SpriteView
+          sprite={spriteForIcon(challenge.glyph, challenge.name, 'rgba(255,255,255,0.92)')}
+          size={26}
+          label={challenge.name}
+        />
       </LinearGradient>
       <View style={{ flex: 1 }}>
         <View style={styles.nameRow}>

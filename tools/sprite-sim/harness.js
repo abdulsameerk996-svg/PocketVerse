@@ -123,6 +123,7 @@ const GAMES = [
   'pet', 'runner', 'driving', 'puzzle', 'zombie', 'farm', 'fishing',
   'platformer', 'rhythm', 'arcade', 'penfight', 'airhockey', 'sumo',
   'tankduel', 'colorclash', 'dodgeduel', 'frontier',
+  'stackrush', 'colorsnap', 'survive60', 'hookrun', 'towerdef',
 ];
 for (const id of GAMES) {
   const sprite = spriteForGame(id, '#7C5CFF', id);

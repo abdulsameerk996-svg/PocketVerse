@@ -81,14 +81,19 @@ export type GameMeta = {
   category?: GameCategory;
   /** How many people play at once. Defaults to 1. Drives the "· 2 Players" line. */
   players?: 1 | 2;
+  /** Difficulty chip on the launcher card. Optional; absent cards show nothing. */
+  difficulty?: 'easy' | 'medium' | 'hard';
+  /** Typical session length, shown on the launcher card (e.g. '2 min'). */
+  session?: string;
 };
 
-export type GameCategory = 'arcade' | 'versus' | 'adventure';
+export type GameCategory = 'arcade' | 'versus' | 'adventure' | 'quick';
 
 export const CATEGORY_LABEL: Record<GameCategory, string> = {
   arcade: 'ARCADE',
   versus: '2 PLAYER',
   adventure: 'ADVENTURE',
+  quick: 'QUICK PLAY',
 };
 
 export type GameModule = {

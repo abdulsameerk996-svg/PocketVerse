@@ -6,6 +6,8 @@ import Animated from 'react-native-reanimated';
 
 import { allGames } from '@/core/registry';
 import type { GameCategory } from '@/core/registry';
+import { createRng, hashString, shuffle } from '@/core/utils/rng';
+import { dayKey } from '@/core/utils/time';
 import { gradients } from '@/ui/theme/tokens';
 import { usePlayerStore } from '@/core/state/playerStore';
 import { scoreRepo } from '@/core/db/repositories';
@@ -26,12 +28,13 @@ import {
   useResponsive,
 } from '@/ui';
 
-const FILTERS = ['all', 'action', 'versus', 'cosy', 'daily', 'levels'] as const;
+const FILTERS = ['all', 'quick', 'action', 'versus', 'daily'] as const;
 type Filter = (typeof FILTERS)[number];
 
 /** Section order in the launcher. Anything without a category is arcade. */
 const SECTIONS: { id: GameCategory; label: string; blurb: string }[] = [
   { id: 'adventure', label: 'ADVENTURE', blurb: 'The flagship — explore, fight, survive' },
+  { id: 'quick', label: 'QUICK PLAY', blurb: 'One minute, one thumb, one more run' },
   { id: 'arcade', label: 'ARCADE', blurb: 'Solo runs, scores and streaks' },
   { id: 'versus', label: '2 PLAYER', blurb: 'Same device, same keyboard, no mercy' },
 ];
@@ -66,6 +69,18 @@ export default function PlayScreen() {
   }, [filter, games]);
 
   const flagship = useMemo(() => visible.find((g) => g.meta.category === 'adventure'), [visible]);
+
+  /**
+   * Quick Play strip: a curated pick from the short games. Seeded by the date
+   * AND the hour, so it rotates through the day and never repeats a game the
+   * player just saw — variety without randomness.
+   */
+  const quickPicks = useMemo(() => {
+    const qs = visible.filter((g) => g.meta.category === 'quick');
+    if (!qs.length) return [];
+    const rng = createRng(hashString(`quick-${dayKey()}-${new Date().getHours()}`));
+    return shuffle(rng, qs).slice(0, 3);
+  }, [visible]);
 
   /**
    * Grouped into launcher sections. Nothing here knows which games exist — a
@@ -118,6 +133,61 @@ export default function PlayScreen() {
             </PressableScale>
           ))}
         </ScrollView>
+
+        {quickPicks.length ? (
+          <View style={{ gap: spacing.sm }}>
+            <SectionHeader
+              title="Quick Play"
+              subtitle="Thirty seconds to fun — the pick changes every hour"
+              action="All quick"
+              onAction={() => setFilter('quick')}
+            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickRow}
+            >
+              {quickPicks.map((g, i) => {
+                const locked = player.level < g.meta.minLevel;
+                return (
+                  <PressableScale
+                    key={g.id}
+                    onPress={() => (locked ? haptics.warn() : router.push(`/game/${g.id}`))}
+                    scaleTo={0.95}
+                    haptic="select"
+                    style={[
+                      styles.quickCard,
+                      { width: cardW, borderColor: i === 0 ? `${g.meta.accent}99` : palette.hairline },
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={[`${g.meta.accent}40`, 'rgba(10,10,20,0.9)']}
+                      style={StyleSheet.absoluteFill}
+                    />
+                    {i === 0 ? (
+                      <View style={[styles.tag, { borderColor: `${g.meta.accent}88`, alignSelf: 'flex-start' }]}>
+                        <Text variant="micro" color={g.meta.accent}>
+                          TODAY'S PICK
+                        </Text>
+                      </View>
+                    ) : null}
+                    <SpriteView sprite={spriteForGame(g.id, g.meta.accent, g.meta.title)} size={40} label={g.meta.title} />
+                    <Text variant="label" numberOfLines={1}>
+                      {g.meta.title}
+                    </Text>
+                    <Text variant="micro" color={g.meta.accent} numberOfLines={1}>
+                      {g.meta.difficulty ?? 'easy'} · {g.meta.session ?? '1 min'}
+                      {bests[g.id] ? ` · ★ ${Math.round(bests[g.id])}` : ''}
+                    </Text>
+                    <Text variant="caption" muted numberOfLines={2} style={styles.tagline}>
+                      {locked ? `Unlocks at level ${g.meta.minLevel}` : g.meta.tagline}
+                    </Text>
+                  </PressableScale>
+                );
+              })}
+            </ScrollView>
+          </View>
+        ) : null}
 
         {flagship ? (
           <PressableScale
@@ -185,6 +255,8 @@ export default function PlayScreen() {
                     minLevel={g.meta.minLevel}
                     category={g.meta.category ?? 'arcade'}
                     players={g.meta.players ?? 1}
+                    difficulty={g.meta.difficulty}
+                    session={g.meta.session}
                     locked={locked}
                     affordable={affordable}
                     best={bests[g.id]}
@@ -228,6 +300,8 @@ function GameCard({
   minLevel,
   category,
   players,
+  difficulty,
+  session,
   locked,
   affordable,
   best,
@@ -245,6 +319,8 @@ function GameCard({
   minLevel: number;
   category: GameCategory;
   players: 1 | 2;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  session?: string;
   locked: boolean;
   affordable: boolean;
   best?: number;
@@ -252,8 +328,16 @@ function GameCard({
 }) {
   const entrance = useEntrance(index);
   // "Air Hockey · 2 Players" — the line the launcher brief asked for.
-  const sectionLabel = category === 'versus' ? '2 Player' : category === 'adventure' ? 'Adventure' : 'Arcade';
+  const sectionLabel =
+    category === 'versus'
+      ? '2 Player'
+      : category === 'adventure'
+        ? 'Adventure'
+        : category === 'quick'
+          ? 'Quick Play'
+          : 'Arcade';
   const subtitle = `${sectionLabel} · ${players === 2 ? '2 Players' : '1 Player'}`;
+  const metaLine = [difficulty, session].filter(Boolean).join(' · ');
 
   return (
     <Animated.View style={entrance}>
@@ -296,6 +380,11 @@ function GameCard({
         <Text variant="caption" muted numberOfLines={2} style={styles.tagline}>
           {locked ? `Unlocks at account level ${minLevel}` : tagline}
         </Text>
+        {!locked && metaLine ? (
+          <Text variant="micro" faint numberOfLines={1}>
+            {metaLine}
+          </Text>
+        ) : null}
 
         <View style={styles.cardFoot}>
           <Text variant="micro" color={energy === 0 ? palette.mint : affordable ? palette.energy : palette.coral}>
@@ -316,6 +405,16 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: spacing.lg },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   filters: { gap: spacing.sm, paddingRight: spacing.lg },
+  quickRow: { gap: spacing.md, paddingRight: spacing.lg },
+  quickCard: {
+    minHeight: 148,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    overflow: 'hidden',
+    gap: 3,
+    justifyContent: 'flex-start',
+  },
   filterChip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm - 1,

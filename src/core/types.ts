@@ -33,7 +33,13 @@ export type GameId =
   | 'colorclash'
   | 'dodgeduel'
   // flagship adventure
-  | 'frontier';
+  | 'frontier'
+  // quick-play collection (Phase 7)
+  | 'stackrush'
+  | 'colorsnap'
+  | 'survive60'
+  | 'hookrun'
+  | 'towerdef';
 
 /* ------------------------------------------------------------------ */
 /* Currency & rewards                                                  */
@@ -300,7 +306,18 @@ export type MetricKey =
   | 'frontier_elites'
   | 'frontier_landmarks'
   | 'frontier_time'
-  | 'frontier_runs';
+  | 'frontier_runs'
+  // quick-play collection
+  | 'stackrush_perfects'
+  | 'stackrush_score'
+  | 'colorsnap_score'
+  | 'colorsnap_streak'
+  | 'survive60_time'
+  | 'survive60_kills'
+  | 'hookrun_distance'
+  | 'hookrun_grapples'
+  | 'towerdef_wave'
+  | 'towerdef_kills';
 
 export type MetricDelta = Partial<Record<MetricKey, number>>;
 
@@ -312,6 +329,12 @@ export const METRIC_MODE: Partial<Record<MetricKey, 'sum' | 'max'>> = {
   fish_species: 'max',
   games_distinct_played: 'max',
   frontier_time: 'max',
+  stackrush_score: 'max',
+  colorsnap_score: 'max',
+  colorsnap_streak: 'max',
+  survive60_time: 'max',
+  hookrun_distance: 'max',
+  towerdef_wave: 'max',
 };
 
 /* ------------------------------------------------------------------ */

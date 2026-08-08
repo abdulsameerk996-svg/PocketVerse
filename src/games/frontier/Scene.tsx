@@ -44,7 +44,12 @@ type SceneProps = {
   seed: number;
   /** Fired once when the run transitions to `over`. */
   onOver: () => void;
+  /** Dev-only: live camera position for the renderer diagnostic. */
+  camDiag?: React.RefObject<CamDiag>;
 };
+
+/** A live snapshot of the camera, for the development renderer readout. */
+export type CamDiag = { x: number; y: number; z: number };
 
 const PICKUP_COLORS: Record<PickupKind, string> = {
   gem: '#4ADE80',
@@ -62,7 +67,7 @@ const FOG: Record<BiomeId, { bg: string; fog: [number, number] }> = {
   danger: { bg: '#180A14', fog: [15, 40] },
 };
 
-export function FrontierScene({ world, input, paused, seed, onOver }: SceneProps) {
+export function FrontierScene({ world, input, paused, seed, onOver, camDiag }: SceneProps) {
   const playerRef = useRef<THREE.Group>(null);
   const auraRef = useRef<THREE.Mesh>(null);
   const sparks = useRef<SparksHandle | null>(null);
@@ -86,6 +91,7 @@ export function FrontierScene({ world, input, paused, seed, onOver }: SceneProps
         playerRef={playerRef}
         auraRef={auraRef}
         sparks={sparks}
+        camDiag={camDiag}
       />
       <Sparks handle={sparks} count={96} />
     </Stage>
@@ -103,6 +109,7 @@ function Sim({
   playerRef,
   auraRef,
   sparks,
+  camDiag,
 }: {
   world: React.RefObject<World | null>;
   input: React.RefObject<FrontierInput>;
@@ -112,6 +119,7 @@ function Sim({
   playerRef: React.RefObject<THREE.Group | null>;
   auraRef: React.RefObject<THREE.Mesh | null>;
   sparks: React.RefObject<SparksHandle | null>;
+  camDiag?: React.RefObject<CamDiag>;
 }) {
   const onOverRef = useRef(onOver);
   onOverRef.current = onOver;
@@ -159,9 +167,15 @@ function Sim({
     abilityCd: 2,
     bossActive: false,
     bossDead: false,
-    enemies: new Array<{ on: boolean; x: number; z: number; kind: EnemyKind }>(
-      ENEMY_POOL,
-    ).fill({ on: false, x: 0, z: 0, kind: 'walker' }),
+    // Array.from, not Array.fill: fill would hand every slot the SAME object,
+    // so one enemy's state would read as every enemy's state and the death-pop
+    // edge detection would burst sparks at wrong positions all over the field.
+    enemies: Array.from({ length: ENEMY_POOL }, () => ({
+      on: false,
+      x: 0,
+      z: 0,
+      kind: 'walker' as EnemyKind,
+    })),
   });
 
   /* ------------------------------------------------ static scenery (once) */
@@ -238,27 +252,38 @@ function Sim({
 
     /* ---------------------------------------------- player + camera ------ */
     const p = w.player;
+    // Defensive: a poisoned sim value must never reach the render transform or
+    // the camera frame. The sim is fuzz-tested for finiteness, but the scene is
+    // the last line before pixels — clamp to a safe value instead of NaN.
+    const px = Number.isFinite(p.x) ? p.x : 0;
+    const pz = Number.isFinite(p.z) ? p.z : 0;
+    const facing = Number.isFinite(p.facing) ? p.facing : 0;
     if (playerRef.current) {
-      playerRef.current.position.set(p.x, 0, p.z);
-      playerRef.current.rotation.y = Math.PI / 2 - p.facing;
+      playerRef.current.position.set(px, 0, pz);
+      playerRef.current.rotation.y = Math.PI / 2 - facing;
     }
     if (auraRef.current) {
-      auraRef.current.position.set(p.x, 0.02, p.z);
+      auraRef.current.position.set(px, 0.02, pz);
       const m = auraRef.current.material as THREE.MeshBasicMaterial;
       m.opacity = 0.28 + (p.invuln > 0 ? Math.sin(w.time * 40) * 0.2 + 0.2 : 0);
     }
 
     // follow camera with a touch of screen shake
     const k = 1 - Math.exp(-3.4 * dt);
-    camera.position.x += (p.x - camera.position.x) * k;
+    camera.position.x += (px - camera.position.x) * k;
     camera.position.y += (25 - camera.position.y) * k;
-    camera.position.z += (p.z + 14 - camera.position.z) * k;
+    camera.position.z += (pz + 14 - camera.position.z) * k;
     if (w.shake > 0.01) {
       const s = w.shake * 0.55;
       camera.position.x += (Math.random() - 0.5) * s;
       camera.position.y += (Math.random() - 0.5) * s * 0.4;
     }
-    camera.lookAt(look.set(p.x, 1, p.z));
+    camera.lookAt(look.set(px, 1, pz));
+    if (camDiag?.current) {
+      camDiag.current.x = camera.position.x;
+      camDiag.current.y = camera.position.y;
+      camDiag.current.z = camera.position.z;
+    }
 
     /* ------------------------------------------------ enemies (pooled) --- */
     const em = enemyMesh.current;

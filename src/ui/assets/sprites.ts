@@ -1151,6 +1151,12 @@ export const GAME_THUMBS: Record<string, MotifKey> = {
   tankduel: 'tank',
   colorclash: 'splat',
   dodgeduel: 'crosshair',
+  frontier: 'compass',
+  stackrush: 'box',
+  colorsnap: 'sun',
+  hookrun: 'wave',
+  survive60: 'heart',
+  towerdef: 'shield',
 };
 
 /** Game thumbnail. `accent` is the module's own accent colour. */

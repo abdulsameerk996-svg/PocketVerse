@@ -7,7 +7,7 @@ import { HAS_KEYBOARD } from '@/core/game3d';
 import { Text, haptics, palette, play, radius, spacing } from '@/ui';
 import { BIOMES, BOSSES, UPGRADE_MAP, normalizeFrontierSave } from './content';
 import { applyUpgrade, createRun, finishRun } from './sim';
-import { FrontierScene } from './Scene';
+import { FrontierScene, type CamDiag } from './Scene';
 import type {
   Banner,
   BiomeId,
@@ -87,6 +87,8 @@ export default function FrontierSurface({
   const world = worldRef.current;
 
   const input = useRef<FrontierInput>({ mx: 0, mz: 0, sprint: false, melee: false, dash: false, ability: false });
+  // Dev-only: filled by the scene's frame loop for the renderer diagnostic.
+  const camDiag = useRef<CamDiag>({ x: 0, y: 0, z: 0 });
 
   const [hud, setHud] = useState<Hud>(() => snapshot(world));
   const [finishing, setFinishing] = useState(false);
@@ -298,7 +300,7 @@ export default function FrontierSurface({
 
   return (
     <View style={styles.root}>
-      <FrontierScene world={worldRef} input={input} paused={paused} seed={seed} onOver={endRun} />
+      <FrontierScene world={worldRef} input={input} paused={paused} seed={seed} onOver={endRun} camDiag={camDiag} />
 
       {/* ------------------------------------------------------------ HUD -- */}
       <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
@@ -329,6 +331,7 @@ export default function FrontierSurface({
             </Text>
           </View>
         ) : null}
+        {__DEV__ ? <DevDiagnostics world={worldRef} cam={camDiag} /> : null}
       </View>
 
       {/* ---------------------------------------------------- touch input --- */}
@@ -368,6 +371,92 @@ export default function FrontierSurface({
           </View>
         </View>
       ) : null}
+    </View>
+  );
+}
+
+/* ================================================ dev renderer readout == */
+
+/**
+ * Development-only renderer diagnostic.
+ *
+ * Frontier is a 3D scene driven entirely from a ref — the React tree knows
+ * nothing about whether the world is actually rendering. This strip reads the
+ * live sim and the camera position the frame loop wrote, so a blank scene is
+ * diagnosable at a glance (WORLD missing → the sim never mounted; CAMERA
+ * frozen → the render loop is not running) instead of being a mystery.
+ * Stripped from production builds by the `__DEV__` guard.
+ */
+function DevDiagnostics({
+  world,
+  cam,
+}: {
+  world: React.RefObject<World | null>;
+  cam: React.RefObject<CamDiag>;
+}) {
+  const [d, setD] = useState({ t: 0, px: 0, pz: 0, cam: '0,0,0', enemies: 0, over: false });
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const w = world.current;
+      if (!w) return;
+      setD({
+        t: w.time,
+        px: w.player.x,
+        pz: w.player.z,
+        cam: `${cam.current.x.toFixed(0)},${cam.current.y.toFixed(0)},${cam.current.z.toFixed(0)}`,
+        enemies: w.enemies.reduce((n, e) => n + (e.active ? 1 : 0), 0),
+        over: w.over,
+      });
+    }, 250);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fin = (v: number) => Number.isFinite(v);
+  const playerOk = fin(d.px) && fin(d.pz);
+  const camOk = d.cam !== '0,0,0' && !d.cam.includes('NaN');
+  const worldOk = d.t >= 0 && !d.over;
+
+  const chip = (label: string, ok: boolean, detail: string, color: string) => (
+    <View
+      key={label}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        backgroundColor: 'rgba(8,8,15,0.72)',
+        borderWidth: 1,
+        borderColor: ok ? 'rgba(52,226,168,0.5)' : 'rgba(255,107,107,0.6)',
+      }}
+    >
+      <Text variant="micro" color={ok ? palette.mint : palette.coral}>
+        {label} {ok ? '✓' : '✗'}
+      </Text>
+      <Text variant="micro" color={color}>
+        {detail}
+      </Text>
+    </View>
+  );
+
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: spacing.huge + spacing.lg,
+        left: spacing.lg,
+        gap: 4,
+        maxWidth: '62%',
+      }}
+    >
+      {chip('WORLD', worldOk, `t=${d.t.toFixed(0)}s`, palette.textMuted)}
+      {chip('PLAYER', playerOk, `${d.px.toFixed(1)},${d.pz.toFixed(1)}`, palette.textMuted)}
+      {chip('CAMERA', camOk, d.cam, palette.textMuted)}
+      {chip('ENTITIES', d.enemies >= 0, `${d.enemies} alive`, palette.textMuted)}
     </View>
   );
 }

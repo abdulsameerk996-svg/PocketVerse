@@ -18,6 +18,12 @@ import { tankDuelModule } from './tankduel';
 import { colorClashModule } from './colorclash';
 import { dodgeDuelModule } from './dodgeduel';
 import { frontierModule } from './frontier';
+// Phase 7 quick-play collection
+import { stackRushModule } from './stackrush';
+import { colorSnapModule } from './colorsnap';
+import { survive60Module } from './survive60';
+import { hookRunModule } from './hookrun';
+import { towerDefModule } from './towerdef';
 
 /**
  * ============================================================================
@@ -31,6 +37,13 @@ import { frontierModule } from './frontier';
 export const GAME_MODULES = [
   // FLAGSHIP — the big game
   frontierModule,
+
+  // QUICK PLAY — one-minute, score-chasing runs
+  stackRushModule,
+  colorSnapModule,
+  survive60Module,
+  hookRunModule,
+  towerDefModule,
 
   petModule,
   runnerModule,
