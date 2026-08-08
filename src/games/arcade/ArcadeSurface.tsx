@@ -75,10 +75,24 @@ export function ArcadeSurface({ onFinish, save, setSave, modifiers }: GameSurfac
   const [active, setActive] = useState<ChallengeId | null>(null);
 
   const today = dayKey();
-  const rotation = useMemo(() => {
+
+  /**
+   * The daily rotation *features* challenges. It does not gate them.
+   *
+   * This used to slice the roster to three and render the remainder as dimmed,
+   * unpressable rows — so Meteor Dodge was unplayable on roughly one day in
+   * four, with no way for the player to override it. A daily pick is a
+   * recommendation; it should never be the reason someone cannot open a game
+   * they own. The seeding is unchanged, so "today's three" are still identical
+   * on every device and still cannot be rerolled by relaunching.
+   */
+  const featured = useMemo(() => {
     const rng = createRng(hashString(`arcade-${today}`));
     return shuffle(rng, CHALLENGES).slice(0, 3);
   }, [today]);
+
+  const featuredIds = useMemo(() => new Set(featured.map((c) => c.id)), [featured]);
+  const rest = useMemo(() => CHALLENGES.filter((c) => !featuredIds.has(c.id)), [featuredIds]);
 
   const end = useCallback(
     (id: ChallengeId, score: number, extra?: { label: string; value: string }[]) => {
@@ -137,68 +151,106 @@ export function ArcadeSurface({ onFinish, save, setSave, modifiers }: GameSurfac
     >
       <Card variant="gradient" gradient={['#2A1152', '#0D0A1A']}>
         <Text variant="micro" color={palette.violet}>
-          TODAY’S ROTATION · {today}
+          TODAY’S FEATURED · {today}
         </Text>
         <Text variant="title">Three challenges, one minute each</Text>
         <Text variant="caption" muted style={{ marginTop: 4 }}>
-          The rotation changes at midnight. High scores are kept forever.
+          The featured picks change at midnight — but every challenge is always
+          playable. High scores are kept forever.
         </Text>
       </Card>
 
-      <SectionHeader title="Live now" subtitle={`${arcadeSave.rounds} rounds played`} />
-      {rotation.map((c) => (
-        <PressableScale
+      <SectionHeader title="Featured today" subtitle={`${arcadeSave.rounds} rounds played`} />
+      {featured.map((c) => (
+        <ChallengeRow
           key={c.id}
+          challenge={c}
+          best={arcadeSave.best[c.id]}
+          featured
           onPress={() => {
             haptics.press();
             setActive(c.id);
           }}
-          style={styles.row}
-          scaleTo={0.975}
-        >
-          <LinearGradient colors={c.colors} style={styles.art}>
-            <Text size={26}>{c.glyph}</Text>
-          </LinearGradient>
-          <View style={{ flex: 1 }}>
-            <Text variant="subheading">{c.name}</Text>
-            <Text variant="caption" muted>
-              {c.blurb}
-            </Text>
-          </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text variant="micro" muted>
-              BEST
-            </Text>
-            <Text variant="label" numeric color={palette.gold}>
-              {arcadeSave.best[c.id] ?? '—'}
-            </Text>
-          </View>
-        </PressableScale>
+        />
       ))}
 
-      <SectionHeader title="Off rotation" subtitle="Back another day" />
-      {CHALLENGES.filter((c) => !rotation.some((r) => r.id === c.id)).map((c) => (
-        <View key={c.id} style={[styles.row, { opacity: 0.42 }]}>
-          <View style={[styles.art, { backgroundColor: palette.surfaceAlt }]}>
-            <Text size={24}>{c.glyph}</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text variant="subheading">{c.name}</Text>
-            <Text variant="caption" muted>
-              Returns in the rotation soon
-            </Text>
-          </View>
-          <Text variant="label" numeric muted>
-            {arcadeSave.best[c.id] ?? '—'}
-          </Text>
-        </View>
-      ))}
+      {rest.length > 0 ? (
+        <>
+          <SectionHeader title="All challenges" subtitle="Always available" />
+          {rest.map((c) => (
+            <ChallengeRow
+              key={c.id}
+              challenge={c}
+              best={arcadeSave.best[c.id]}
+              onPress={() => {
+                haptics.press();
+                setActive(c.id);
+              }}
+            />
+          ))}
+        </>
+      ) : null}
     </ScrollView>
   );
 }
 
+/**
+ * One challenge row. Featured and unfeatured differ only in a badge — both are
+ * pressable, because the rotation is a recommendation, not a lock.
+ */
+const ChallengeRow = React.memo(function ChallengeRow({
+  challenge,
+  best,
+  featured,
+  onPress,
+}: {
+  challenge: (typeof CHALLENGES)[number];
+  best?: number;
+  featured?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <PressableScale onPress={onPress} style={styles.row} scaleTo={0.975}>
+      <LinearGradient colors={challenge.colors} style={styles.art}>
+        <Text size={26}>{challenge.glyph}</Text>
+      </LinearGradient>
+      <View style={{ flex: 1 }}>
+        <View style={styles.nameRow}>
+          <Text variant="subheading">{challenge.name}</Text>
+          {featured ? (
+            <View style={styles.badge}>
+              <Text variant="micro" color={palette.violet}>
+                TODAY
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <Text variant="caption" muted>
+          {challenge.blurb}
+        </Text>
+      </View>
+      <View style={{ alignItems: 'flex-end' }}>
+        <Text variant="micro" muted>
+          BEST
+        </Text>
+        <Text variant="label" numeric color={best ? palette.gold : palette.textMuted}>
+          {best ?? '—'}
+        </Text>
+      </View>
+    </PressableScale>
+  );
+});
+
 const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing.lg, gap: spacing.md },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  badge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: radius.xs,
+    borderWidth: 1,
+    borderColor: `${palette.violet}88`,
+  },
   playRoot: { flex: 1 },
   row: {
     flexDirection: 'row',

@@ -66,9 +66,19 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     const { entries } = get();
     const items = [...dirtyItems].map((id) => entries[id]).filter(Boolean) as InventoryEntry[];
     const unlocks = [...dirtyUnlocks];
-    dirtyItems = new Set();
-    dirtyUnlocks = new Set();
-    await Promise.all([inventoryRepo.upsertMany(items), unlockRepo.addMany(unlocks)]);
+    if (!items.length && !unlocks.length) return;
+
+    await inventoryRepo.upsertMany(items);
+    await unlockRepo.addMany(unlocks);
+
+    // Clear only what was actually written, and only once it *is* written.
+    // Clearing up front looks harmless and is not: if the write fails, the save
+    // service re-queues this channel but the ids are gone, so the retry writes
+    // an empty array and reports success. That is how a reward can vanish with
+    // no error anywhere. Deleting per id also preserves anything marked dirty
+    // while the await was in flight.
+    for (const e of items) dirtyItems.delete(e.itemId);
+    for (const id of unlocks) dirtyUnlocks.delete(id);
   },
 
   add: (itemId, qty = 1) => {

@@ -104,23 +104,25 @@ export const useProgressStore = create<ProgressStore>((set, get) => ({
 
   persist: async () => {
     const state = get();
+    const metricKeys = [...dirtyMetrics];
+    const questKeys = [...dirtyQuests];
+    const achievementKeys = [...dirtyAchievements];
+
     const metrics: Partial<Record<MetricKey, number>> = {};
-    for (const k of dirtyMetrics) metrics[k] = state.metrics[k] ?? 0;
-    const quests = [...dirtyQuests].map((k) => state.quests[k]).filter(Boolean);
-    const achievements = [...dirtyAchievements]
-      .map((k) => state.achievements[k])
-      .filter(Boolean);
+    for (const k of metricKeys) metrics[k] = state.metrics[k] ?? 0;
+    const quests = questKeys.map((k) => state.quests[k]).filter(Boolean);
+    const achievements = achievementKeys.map((k) => state.achievements[k]).filter(Boolean);
 
-    dirtyMetrics = new Set();
-    dirtyQuests = new Set();
-    dirtyAchievements = new Set();
+    await metricRepo.saveMany(metrics);
+    await questRepo.saveMany(quests);
+    await achievementRepo.saveMany(achievements);
+    await metaRepo.setRaw(EXTRA_KEY, state.extra);
 
-    await Promise.all([
-      metricRepo.saveMany(metrics),
-      questRepo.saveMany(quests),
-      achievementRepo.saveMany(achievements),
-      metaRepo.setRaw(EXTRA_KEY, state.extra),
-    ]);
+    // Same rule as the inventory channel: forget a key only once it is durable,
+    // so a failed write is genuinely retried instead of silently discarded.
+    for (const k of metricKeys) dirtyMetrics.delete(k);
+    for (const k of questKeys) dirtyQuests.delete(k);
+    for (const k of achievementKeys) dirtyAchievements.delete(k);
   },
 
   track: (delta, gameId) => {

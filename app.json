@@ -36,7 +36,13 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "single"
+      "output": "static",
+      "favicon": "./public/icons/favicon-32.png",
+      "name": "PocketVerse",
+      "shortName": "PocketVerse",
+      "themeColor": "#08080F",
+      "backgroundColor": "#08080F",
+      "description": "Eleven games, one avatar, one inventory, one save file. Offline-first, no account, no network."
     },
     "plugins": [
       "expo-router",
@@ -54,7 +60,8 @@
           "backgroundColor": "#08080F",
           "resizeMode": "contain"
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -1,4 +1,5 @@
 import { AppState, type AppStateStatus } from 'react-native';
+import { installExtraFlushTriggers } from './flushTriggers';
 
 /**
  * Write-behind save scheduler.
@@ -18,6 +19,7 @@ const dirty = new Set<string>();
 let timer: ReturnType<typeof setTimeout> | null = null;
 let flushing = false;
 let appStateSub: { remove: () => void } | null = null;
+let removeExtraTriggers: (() => void) | null = null;
 
 export function registerChannel(name: string, flush: Flusher) {
   channels.set(name, flush);
@@ -69,11 +71,15 @@ export function startAutosave() {
     if (state !== 'active') void flush();
   };
   appStateSub = AppState.addEventListener('change', onChange);
+  // Web adds pagehide/visibilitychange here; native is a no-op.
+  removeExtraTriggers = installExtraFlushTriggers(() => void flush());
 }
 
 export function stopAutosave() {
   appStateSub?.remove();
   appStateSub = null;
+  removeExtraTriggers?.();
+  removeExtraTriggers = null;
   if (timer) clearTimeout(timer);
   timer = null;
 }

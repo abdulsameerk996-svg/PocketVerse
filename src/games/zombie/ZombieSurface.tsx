@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -30,8 +30,17 @@ import {
   useResponsive,
   play,
 } from '@/ui';
+import { useKeyAxis } from '@/ui/hooks/useKeyboard';
+import {
+  Atmosphere,
+  BurstLayer,
+  SignalBeacon,
+  hudCardStyle,
+  useValueIncrease,
+  type BurstHandle,
+} from './effects';
 import type { ZombieSave } from './types';
-import { UPGRADES, WEAPONS, upgradeCost } from './content';
+import { UPGRADES, WEAPONS, normalizeZombieSave, upgradeCost } from './content';
 
 const ZOMBIES = 26;
 const BULLETS = 26;
@@ -62,7 +71,7 @@ export function ZombieSurface({
   setSave,
 }: GameSurfaceProps) {
   const { width, height, s: sc } = useResponsive();
-  const zSave = save as ZombieSave;
+  const zSave = useMemo(() => normalizeZombieSave(save), [save]);
 
   const weapon = WEAPONS.find((w) => w.id === zSave.weapon) ?? WEAPONS[0];
   const up = zSave.upgrades;
@@ -75,6 +84,31 @@ export function ZombieSurface({
   const arenaTop = sc(90);
   const arenaBottom = height - sc(150);
   const playerR = sc(18);
+  // Sized down from the first pass: at sc(132) the beacon's halo covered a
+  // sizeable share of the upper playfield and zombies read as "behind glass"
+  // while crossing it. Smaller keeps the set-piece without competing with the
+  // entities the player is actually tracking.
+  const signalSize = sc(104);
+
+  /**
+   * Every scaled length the simulation needs is resolved *here*, on the JS
+   * thread, and captured as a plain number.
+   *
+   * `sc` comes from `useResponsive` and is an ordinary JS closure. A worklet
+   * that captures a non-worklet function receives it as a RemoteFunction, and
+   * calling one synchronously on the UI thread throws
+   * "[Worklets] Tried to synchronously call a non-worklet function" — which
+   * kills the frame callback and takes the screen down with it. Every other
+   * game in PocketVerse precomputes for exactly this reason.
+   */
+  const zombieSize = sc(26);
+  const zombieSpeed = sc(48);
+  const zombieSpeedJitter = sc(26);
+  const zombieWaveSpeed = sc(2.4);
+  const bulletSize = sc(8);
+  const pickupSize = sc(20);
+  const magnetRadius = sc(90);
+  const magnetPull = sc(220);
 
   /* ------------------------------------------------------ shared state */
   const pool = useEntityPool(POOL);
@@ -111,10 +145,22 @@ export function ZombieSurface({
     play('game.hit');
   }, []);
 
-  const startWave = useCallback((n: number) => {
-    setWaveDisplay(n);
-    haptics.press();
-  }, []);
+  /**
+   * Presentation-only signal state. The beacon polls this and clears it; the
+   * simulation never reads it, and bumping it here rather than in the worklet
+   * means the game loop is untouched by the visual layer.
+   */
+  const waveBurst = useSharedValue(0);
+  const bursts = useRef<BurstHandle | null>(null);
+
+  const startWave = useCallback(
+    (n: number) => {
+      setWaveDisplay(n);
+      waveBurst.value = 1;
+      haptics.press();
+    },
+    [waveBurst],
+  );
 
   const finish = useCallback(() => {
     setOver((already) => {
@@ -123,12 +169,15 @@ export function ZombieSurface({
       const w = Math.floor(wave.value);
       const score = k * 10 + w * 120;
 
-      setSave((prev: ZombieSave) => ({
-        ...prev,
-        bestWave: Math.max(prev.bestWave, w),
-        totalKills: prev.totalKills + k,
-        runs: prev.runs + 1,
-      }));
+      setSave((raw: unknown) => {
+        const prev = normalizeZombieSave(raw);
+        return {
+          ...prev,
+          bestWave: Math.max(prev.bestWave, w),
+          totalKills: prev.totalKills + k,
+          runs: prev.runs + 1,
+        };
+      });
 
       onFinish({
         score,
@@ -190,12 +239,13 @@ export function ZombieSurface({
                 : side === 3
                   ? arenaBottom + 30
                   : arenaTop + Math.random() * (arenaBottom - arenaTop);
-            e.w = sc(26);
-            e.h = sc(26);
+            e.w = zombieSize;
+            e.h = zombieSize;
             // hp scales with wave; data holds current hp, data2 the max
             e.data = 22 + wave.value * 9;
             e.data2 = e.data;
-            e.vx = sc(48) + Math.random() * sc(26) + wave.value * sc(2.4);
+            e.vx =
+              zombieSpeed + Math.random() * zombieSpeedJitter + wave.value * zombieWaveSpeed;
             waveRemaining.value -= 1;
             break;
           }
@@ -237,8 +287,8 @@ export function ZombieSurface({
               b.y = py.value;
               b.vx = Math.cos(a) * weapon.speed;
               b.vy = Math.sin(a) * weapon.speed;
-              b.w = sc(8);
-              b.h = sc(8);
+              b.w = bulletSize;
+              b.h = bulletSize;
               b.data = pierce;
               break;
             }
@@ -275,8 +325,8 @@ export function ZombieSurface({
                 p.active = true;
                 p.x = z.x;
                 p.y = z.y;
-                p.w = sc(20);
-                p.h = sc(20);
+                p.w = pickupSize;
+                p.h = pickupSize;
                 p.data = 8; // seconds before it disappears
                 break;
               }
@@ -329,9 +379,9 @@ export function ZombieSurface({
         const dx = px.value - p.x;
         const dy = py.value - p.y;
         const d = Math.sqrt(dx * dx + dy * dy) || 1;
-        if (d < sc(90)) {
-          p.x += (dx / d) * sc(220) * dt;
-          p.y += (dy / d) * sc(220) * dt;
+        if (d < magnetRadius) {
+          p.x += (dx / d) * magnetPull * dt;
+          p.y += (dy / d) * magnetPull * dt;
         }
         if (d < playerR + p.w / 2) {
           p.active = false;
@@ -349,10 +399,12 @@ export function ZombieSurface({
       }
     },
     [
-      alive, arenaBottom, arenaTop, damage, dirX, dirY, finish, fireRate, fireTimer, frame,
-      hp, hurtFlash, kills, maxHp, modifiers.luck, onHurt, onKill, onShoot, pierce, playerR,
-      pool, px, py, sc, scrapCollected, spawnTimer, speed, startWave, wave, waveRemaining,
-      weapon.pellets, weapon.speed, weapon.spread, width,
+      alive, arenaBottom, arenaTop, bulletSize, damage, dirX, dirY, finish, fireRate,
+      fireTimer, frame, hp, hurtFlash, kills, magnetPull, magnetRadius, maxHp,
+      modifiers.luck, onHurt, onKill, onShoot, pickupSize, pierce, playerR, pool, px, py,
+      scrapCollected, spawnTimer, speed, startWave, wave, waveRemaining, weapon.pellets,
+      weapon.speed, weapon.spread, width, zombieSize, zombieSpeed, zombieSpeedJitter,
+      zombieWaveSpeed,
     ],
   );
 
@@ -365,6 +417,39 @@ export function ZombieSurface({
   }, [waveRemaining]);
 
   /* --------------------------------------------------------- controls */
+
+  /**
+   * Desktop movement. The virtual stick below still works with a mouse, but
+   * holding a button down to steer a twin-stick shooter is miserable, so WASD
+   * and the arrow keys write the same direction the stick does.
+   *
+   * This runs on the JS thread and only assigns to shared values — it never
+   * enters the simulation worklet, which is the one thing this file must not
+   * get wrong (see the `sc()` note above the scaled constants).
+   */
+  const onKeyAxis = useCallback(
+    (x: number, y: number) => {
+      dirX.value = x;
+      dirY.value = y;
+    },
+    [dirX, dirY],
+  );
+  useKeyAxis(!paused && !over && !showShop, onKeyAxis);
+
+  /**
+   * A collection burst at the player, driven by watching the existing scrap
+   * counter rise. Deliberately observational: the pickup logic, its collection
+   * calculation and the reward path are verified working and are not touched,
+   * called or wrapped by any of this.
+   */
+  useValueIncrease(
+    scrapCollected,
+    useCallback(() => {
+      bursts.current?.fire(px.value, py.value, palette.gold);
+      bursts.current?.fire(px.value, py.value, palette.mint);
+    }, [px, py]),
+    !over,
+  );
 
   const stickBase = useSharedValue({ x: 0, y: 0 });
   const stickPos = useSharedValue({ x: 0, y: 0 });
@@ -422,8 +507,29 @@ export function ZombieSurface({
   return (
     <GestureDetector gesture={gesture}>
       <View style={styles.root}>
-        <LinearGradient colors={['#1A0E12', '#0C0A0E', '#050506']} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={['#160C18', '#0B0912', '#040407']} style={StyleSheet.absoluteFill} />
         <View style={[styles.arena, { top: arenaTop, height: arenaBottom - arenaTop }]} />
+
+        {/* depth behind the play space — grid, drifting fog, vignette */}
+        <Atmosphere
+          width={width}
+          top={arenaTop}
+          height={arenaBottom - arenaTop}
+          accent={palette.cyan}
+        />
+
+        {/* the namesake, purely decorative — no hitbox, no interaction */}
+        <SignalBeacon
+          x={width / 2}
+          y={arenaTop + (arenaBottom - arenaTop) * 0.26}
+          size={signalSize}
+          px={px}
+          py={py}
+          hp={hp}
+          maxHp={maxHp}
+          alive={alive}
+          burst={waveBurst}
+        />
 
         {Array.from({ length: POOL }, (_, i) => (
           <ZEntity key={i} index={i} pool={pool} frame={frame} />
@@ -432,8 +538,23 @@ export function ZombieSurface({
         <Animated.View
           style={[styles.player, { width: playerR * 2, height: playerR * 2, borderRadius: playerR }, playerStyle]}
         >
+          {/* a lit base so the player never loses contrast against the fog */}
+          <View
+            style={[
+              styles.playerGlow,
+              { width: playerR * 3.1, height: playerR * 3.1, borderRadius: playerR * 2 },
+            ]}
+          />
+          <View
+            style={[
+              styles.playerRing,
+              { width: playerR * 2.1, height: playerR * 2.1, borderRadius: playerR * 1.4 },
+            ]}
+          />
           <Text size={playerR * 1.4}>🧑‍🚀</Text>
         </Animated.View>
+
+        <BurstLayer handle={bursts} />
 
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.hurt, hurtStyle]} />
         <Animated.View pointerEvents="none" style={[styles.stickOuter, stickOuter]} />
@@ -444,10 +565,21 @@ export function ZombieSurface({
           accent={palette.coral}
           centre={
             <View style={styles.hudCentre}>
-              <Text variant="micro" color={palette.coral}>
-                WAVE {waveDisplay}
-              </Text>
+              <View style={hudCardStyle}>
+                <Text variant="micro" color={palette.coral}>
+                  WAVE {waveDisplay}
+                </Text>
+              </View>
               <LiveValue value={kills} variant="title" format={(v) => `${Math.floor(v)} kills`} />
+              <View style={styles.scrapRow}>
+                <Text size={11}>🔩</Text>
+                <LiveValue
+                  value={scrapCollected}
+                  variant="micro"
+                  color={palette.gold}
+                  format={(v) => `${Math.floor(v)}`}
+                />
+              </View>
             </View>
           }
           right={<Text size={16}>{weapon.glyph}</Text>}
@@ -509,9 +641,22 @@ const ZEntity = React.memo(function ZEntity({
     return <Animated.View pointerEvents="none" style={[styles.bullet, style]} />;
   }
 
+  // Scrap gets a lit halo and a slow bob so it reads as valuable against the
+  // fog. Purely visual — position and collection still come from the pool.
+  if (!isZombie) {
+    return (
+      <Animated.View pointerEvents="none" style={[styles.entity, style]}>
+        <View style={styles.scrapGlow} />
+        <View style={styles.scrapRing} />
+        <Text size={15}>{glyph}</Text>
+      </Animated.View>
+    );
+  }
+
   return (
     <Animated.View pointerEvents="none" style={[styles.entity, style]}>
-      <Text size={isZombie ? 22 : 16}>{glyph}</Text>
+      <View style={styles.zombieShadow} />
+      <Text size={22}>{glyph}</Text>
     </Animated.View>
   );
 });
@@ -565,10 +710,10 @@ const UpgradeSheet = React.memo(function UpgradeSheet({
       }
       player.spendCoins(cost);
       inv.remove('mat_scrap', scrapCost);
-      setSave((prev: ZombieSave) => ({
-        ...prev,
-        upgrades: { ...prev.upgrades, [key]: prev.upgrades[key] + 1 },
-      }));
+      setSave((raw: unknown) => {
+        const prev = normalizeZombieSave(raw);
+        return { ...prev, upgrades: { ...prev.upgrades, [key]: prev.upgrades[key] + 1 } };
+      });
       haptics.success();
       play('reward.chest');
     },
@@ -645,10 +790,53 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,77,77,0.25)',
   },
   entity: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  bullet: { position: 'absolute', borderRadius: 99, backgroundColor: palette.gold },
+  bullet: {
+    position: 'absolute',
+    borderRadius: 99,
+    backgroundColor: palette.gold,
+    // A tracer read, so a stream of shots is legible as a line of fire.
+    shadowColor: palette.gold,
+    shadowOpacity: 0.9,
+    shadowRadius: 6,
+    elevation: 4,
+  },
   player: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  playerGlow: { position: 'absolute', backgroundColor: palette.cyan, opacity: 0.12 },
+  playerRing: {
+    position: 'absolute',
+    borderWidth: 1.5,
+    borderColor: palette.cyan,
+    opacity: 0.55,
+  },
+  zombieShadow: {
+    position: 'absolute',
+    bottom: -2,
+    width: 18,
+    height: 5,
+    borderRadius: 9,
+    backgroundColor: '#000',
+    opacity: 0.45,
+  },
+  scrapGlow: {
+    position: 'absolute',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: palette.gold,
+    opacity: 0.22,
+  },
+  scrapRing: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: palette.gold,
+    opacity: 0.7,
+  },
   hurt: { backgroundColor: palette.coral },
-  hudCentre: { alignItems: 'center' },
+  hudCentre: { alignItems: 'center', gap: 2 },
+  scrapRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   hpBar: { position: 'absolute', left: spacing.xl, right: spacing.xl, bottom: spacing.huge },
   shopBtn: { position: 'absolute', right: spacing.lg, bottom: spacing.lg },
   stickOuter: {

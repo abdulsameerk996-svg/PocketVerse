@@ -1,15 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import Animated, {
   FadeIn,
   FadeOut,
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  type SharedValue,
 } from 'react-native-reanimated';
-import { useGameLoop, useEntityPool, type PooledEntity } from '@/core/game/useGameLoop';
 import { PressableScale, Text, haptics, palette, radius, spacing } from '@/ui';
 import type { ChallengeProps } from './types';
 
@@ -95,7 +91,7 @@ export function ReflexGrid({ onEnd }: ChallengeProps) {
             >
               {t ? (
                 <Animated.View entering={FadeIn.duration(90)} exiting={FadeOut.duration(120)}>
-                  <Text size={30}>{t.bad ? '💣' : '🟢'}</Text>
+                  <Text size={30}>{t.bad ? 'ðŸ’£' : 'ðŸŸ¢'}</Text>
                 </Animated.View>
               ) : null}
             </PressableScale>
@@ -217,7 +213,7 @@ export function ColourMatch({ onEnd }: ChallengeProps) {
         </Text>
         {streak > 2 ? (
           <Text variant="label" color={palette.gold}>
-            {streak}× streak
+            {streak}x streak
           </Text>
         ) : null}
       </View>
@@ -240,138 +236,35 @@ export function ColourMatch({ onEnd }: ChallengeProps) {
 
 /* -------------------------------------------------------- Meteor Dodge */
 
-const DODGE_POOL = 18;
-
-export function MeteorDodge({ onEnd, speed }: ChallengeProps) {
-  const { width, height } = useWindowDimensions();
-  const areaH = height * 0.52;
-
-  const pool = useEntityPool(DODGE_POOL);
-  const frame = useSharedValue(0);
-  const px = useSharedValue(width / 2);
-  const survived = useSharedValue(0);
-  const spawnTimer = useSharedValue(0.5);
-  const alive = useSharedValue(1);
-  const [over, setOver] = useState(false);
-  const [display, setDisplay] = useState(0);
-
-  useEffect(() => {
-    const id = setInterval(() => setDisplay(Math.floor(survived.value * 10)), 120);
-    return () => clearInterval(id);
-  }, [survived]);
-
-  const end = useCallback(() => {
-    setOver(true);
-    const t = survived.value;
-    onEnd(Math.round(t * 60), [{ label: 'Survived', value: `${t.toFixed(1)}s` }]);
-  }, [onEnd, survived]);
-
-  const loop = useCallback(
-    (dt: number) => {
-      'worklet';
-      if (alive.value < 1) return;
-      frame.value += 1;
-      survived.value += dt;
-
-      spawnTimer.value -= dt;
-      if (spawnTimer.value <= 0) {
-        spawnTimer.value = Math.max(0.14, 0.55 - survived.value * 0.012);
-        for (let i = 0; i < DODGE_POOL; i++) {
-          const e = pool.value[i];
-          if (e.active) continue;
-          e.active = true;
-          e.x = 20 + Math.random() * (width - 40);
-          e.y = -30;
-          e.w = 26 + Math.random() * 14;
-          e.h = e.w;
-          e.vy = 220 + Math.random() * 180 + survived.value * 9;
-          break;
-        }
-      }
-
-      for (let i = 0; i < DODGE_POOL; i++) {
-        const e = pool.value[i];
-        if (!e.active) continue;
-        e.y += e.vy * dt;
-        if (e.y > areaH + 40) {
-          e.active = false;
-          continue;
-        }
-        const dx = Math.abs(e.x - px.value);
-        const dy = Math.abs(e.y - (areaH - 40));
-        if (dx < e.w * 0.5 + 16 && dy < e.h * 0.5 + 16) {
-          alive.value = 0;
-          runOnJS(haptics.fail)();
-          runOnJS(end)();
-          return;
-        }
-      }
-    },
-    [alive, areaH, end, frame, pool, px, spawnTimer, survived, width],
-  );
-
-  useGameLoop(loop, !over);
-
-  const gesture = useMemo(
-    () =>
-      Gesture.Pan().onChange((e) => {
-        'worklet';
-        px.value = Math.max(20, Math.min(width - 20, px.value + e.changeX));
-      }),
-    [px, width],
-  );
-
-  const playerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: px.value - 18 }, { translateY: areaH - 58 }],
-  }));
-
+/**
+ * Meteor Dodge is now a 3D game (`MeteorDodge3D.tsx`).
+ *
+ * It is loaded lazily for the same reason Pen Fight is: `src/games/index.ts`
+ * imports every module eagerly so the registry and catalog are complete at
+ * boot, and pulling three.js into that path would tax the hub for a challenge
+ * that is only in the rotation two days out of three.
+ */
+export function MeteorDodge(props: ChallengeProps) {
   return (
-    <GestureDetector gesture={gesture}>
-      <View style={styles.wrap}>
-        <ChallengeHeader title="Meteor Dodge" hint="Drag to move. Do not get hit." score={display} left={null} />
-        <View style={[styles.dodgeArea, { height: areaH }]}>
-          {Array.from({ length: DODGE_POOL }, (_, i) => (
-            <DodgeRock key={i} index={i} pool={pool} frame={frame} />
-          ))}
-          <Animated.View style={[styles.dodgePlayer, playerStyle]}>
-            <Text size={26}>🛸</Text>
-          </Animated.View>
-        </View>
-      </View>
-    </GestureDetector>
+    <React.Suspense fallback={<ChallengeLoading />}>
+      <MeteorDodgeLazy {...props} />
+    </React.Suspense>
   );
 }
 
-const DodgeRock = React.memo(function DodgeRock({
-  index,
-  pool,
-  frame,
-}: {
-  index: number;
-  pool: SharedValue<PooledEntity[]>;
-  frame: SharedValue<number>;
-}) {
-  const style = useAnimatedStyle(() => {
-    const f = frame.value;
-    const e = pool.value[index];
-    if (!e || !e.active) return { opacity: 0, transform: [{ translateY: -999 }] };
-    return {
-      opacity: 1,
-      transform: [
-        { translateX: e.x - e.w / 2 },
-        { translateY: e.y },
-        { rotate: `${(f * 3 + index * 30) % 360}deg` },
-      ],
-      width: e.w,
-      height: e.h,
-    };
-  });
+const MeteorDodgeLazy = React.lazy(() => import('./MeteorDodge3D'));
+
+function ChallengeLoading() {
   return (
-    <Animated.View pointerEvents="none" style={[styles.rock, style]}>
-      <Text size={20}>☄️</Text>
-    </Animated.View>
+    <View style={[styles.wrap, { alignItems: 'center', justifyContent: 'center' }]}>
+      <Text size={40}>☄️</Text>
+      <Text variant="caption" muted style={{ marginTop: spacing.sm }}>
+        Loading arena
+      </Text>
+    </View>
   );
-});
+}
+
 
 /* -------------------------------------------------------------- shared */
 

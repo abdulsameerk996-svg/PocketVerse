@@ -12,6 +12,20 @@ import { useMemo } from 'react';
 const BASE_W = 390;
 const BASE_H = 844;
 
+/**
+ * Widest the playfield is ever allowed to get.
+ *
+ * Every size in the app derives from window width against a 390pt reference, so
+ * on a 1920px desktop `s(18)` would resolve to 88px and the whole UI would be
+ * comically large. On web the app is therefore laid out as a centred column of
+ * at most this width — the same shape it has on a phone — and `useResponsive`
+ * reports the *column* rather than the window, so a game's arena maths lands
+ * inside the frame it is actually drawn in.
+ *
+ * Native is untouched: a phone is narrower than this, so the clamp never binds.
+ */
+export const MAX_FRAME_WIDTH = 520;
+
 const win = Dimensions.get('window');
 
 export function scaleWidth(size: number, width = win.width) {
@@ -47,7 +61,10 @@ export type ResponsiveInfo = {
 };
 
 export function useResponsive(): ResponsiveInfo {
-  const { width, height } = useWindowDimensions();
+  const win = useWindowDimensions();
+  // Match the centred column `_layout.tsx` renders the app into on web.
+  const width = Platform.OS === 'web' ? Math.min(win.width, MAX_FRAME_WIDTH) : win.width;
+  const height = win.height;
   return useMemo(() => {
     const isLandscape = width > height;
     const shortEdge = Math.min(width, height);

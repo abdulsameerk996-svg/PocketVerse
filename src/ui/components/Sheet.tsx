@@ -4,6 +4,7 @@ import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { palette, radius, spacing } from '../theme/tokens';
+import { MAX_FRAME_WIDTH } from '../theme/responsive';
 import { Text } from './Text';
 import { PressableScale } from './PressableScale';
 
@@ -79,9 +80,15 @@ export const Sheet = memo(function Sheet({
 });
 
 const styles = StyleSheet.create({
-  root: { flex: 1, justifyContent: 'flex-end' },
+  // `alignItems: center` + the sheet's own maxWidth keep bottom sheets aligned
+  // with the centred app column on desktop web. A native `Modal` renders at the
+  // document root, outside the frame in `_layout.tsx`, so it has to be told the
+  // width itself rather than inheriting it.
+  root: { flex: 1, justifyContent: 'flex-end', alignItems: 'center' },
   scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(4,4,10,0.55)' },
   sheet: {
+    width: '100%',
+    maxWidth: MAX_FRAME_WIDTH,
     backgroundColor: palette.abyss,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,

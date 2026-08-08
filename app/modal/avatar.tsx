@@ -1,7 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
+
+import { persistPickedPhoto } from '@/core/services/photoStore';
 
 import { usePlayerStore } from '@/core/state/playerStore';
 import { useInventoryStore } from '@/core/state/inventoryStore';
@@ -68,13 +69,17 @@ export default function AvatarModal() {
   const pickPhoto = useCallback(async () => {
     try {
       setBusy(true);
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert(
-          'Photo access needed',
-          'PocketVerse needs permission to read the image you choose. It is stored only on this device.',
-        );
-        return;
+      // Browsers grant access through the file dialog itself; there is no
+      // permission to request and asking returns an unhelpful denial.
+      if (Platform.OS !== 'web') {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert(
+            'Photo access needed',
+            'PocketVerse needs permission to read the image you choose. It is stored only on this device.',
+          );
+          return;
+        }
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
@@ -84,14 +89,11 @@ export default function AvatarModal() {
       });
       if (result.canceled || !result.assets?.length) return;
 
-      // Copy into app storage so the avatar survives the picker's cache being cleared.
-      const source = result.assets[0].uri;
-      const dir = `${FileSystem.documentDirectory}avatars/`;
-      await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {});
-      const dest = `${dir}${uid('av_')}.jpg`;
-      await FileSystem.copyAsync({ from: source, to: dest });
-
-      setAvatar({ photoUri: dest });
+      // Native copies into the app's own document directory; web inlines it as
+      // a data URL, because a browser has neither. Either way the result is a
+      // URI that survives a restart, and nothing leaves the device.
+      const stored = await persistPickedPhoto(result.assets[0].uri);
+      setAvatar({ photoUri: stored });
       haptics.success();
     } catch {
       Alert.alert('Could not use that image', 'Try another photo.');

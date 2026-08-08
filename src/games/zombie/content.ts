@@ -1,5 +1,5 @@
 import type { ItemDef } from '@/core/types';
-import type { WeaponDef } from './types';
+import type { WeaponDef, WeaponId, ZombieSave } from './types';
 import { palette } from '@/ui/theme/tokens';
 
 export const WEAPONS: WeaponDef[] = [
@@ -108,4 +108,55 @@ export const UPGRADES = [
 
 export function upgradeCost(baseCost: number, level: number) {
   return Math.round(baseCost * Math.pow(1.55, level));
+}
+
+/* ------------------------------------------------------------------ save -- */
+
+export function defaultZombieSave(): ZombieSave {
+  return {
+    weapon: 'pistol',
+    unlockedWeapons: ['pistol'],
+    upgrades: { damage: 0, fireRate: 0, health: 0, pierce: 0 },
+    bestWave: 0,
+    totalKills: 0,
+    runs: 0,
+  };
+}
+
+const num = (v: unknown, fallback = 0) => (typeof v === 'number' && isFinite(v) ? v : fallback);
+
+/**
+ * Coerce a persisted blob into a complete, finite `ZombieSave`.
+ *
+ * The core stores each module's save opaquely and only shallow-merges defaults
+ * on hydrate, so a blob written by an older build can arrive with a missing or
+ * partial `upgrades` object. The surface derives HP, damage and fire rate from
+ * those numbers on its first render, so a hole here is a crash or a NaN arena
+ * rather than a cosmetic glitch. Normalising is cheap; trusting it is not.
+ */
+export function normalizeZombieSave(raw: unknown): ZombieSave {
+  const base = defaultZombieSave();
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return base;
+
+  const s = raw as Partial<ZombieSave>;
+  const up = (s.upgrades ?? {}) as Partial<ZombieSave['upgrades']>;
+  const known = new Set(WEAPONS.map((w) => w.id));
+  const unlocked = Array.isArray(s.unlockedWeapons)
+    ? s.unlockedWeapons.filter((id): id is WeaponId => known.has(id as WeaponId))
+    : [];
+  if (!unlocked.includes('pistol')) unlocked.unshift('pistol');
+
+  return {
+    weapon: known.has(s.weapon as WeaponId) ? (s.weapon as WeaponId) : base.weapon,
+    unlockedWeapons: unlocked,
+    upgrades: {
+      damage: Math.max(0, num(up.damage)),
+      fireRate: Math.max(0, num(up.fireRate)),
+      health: Math.max(0, num(up.health)),
+      pierce: Math.max(0, num(up.pierce)),
+    },
+    bestWave: Math.max(0, num(s.bestWave)),
+    totalKills: Math.max(0, num(s.totalKills)),
+    runs: Math.max(0, num(s.runs)),
+  };
 }

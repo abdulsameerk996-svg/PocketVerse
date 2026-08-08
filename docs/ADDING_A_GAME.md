@@ -132,6 +132,32 @@ const style = useAnimatedStyle(() => {
 Give each pool slot a **fixed visual** where you can (see the runner's `BANDS`),
 so the glyph never has to cross the bridge.
 
+> ⚠️ A worklet may only call **other worklets**. Anything else it captures —
+> including `sc` from `useResponsive` — arrives on the UI thread as a remote
+> function and *throws* the moment you call it. Resolve scaled constants in the
+> component body and capture the numbers:
+>
+> ```tsx
+> const zombieSize = sc(26);          // ✅ JS thread, captured as a number
+> const loop = useCallback((dt) => {
+>   'worklet';
+>   e.w = zombieSize;                 // ✅
+>   e.h = sc(26);                     // ❌ crashes the frame callback
+> }, [zombieSize]);
+> ```
+
+### For a 3D game
+
+Do **not** force a 3D game through `useGameLoop` — see `src/games/penfight`.
+`expo-gl` renders from JS, so the simulation belongs in R3F's `useFrame`, with
+its own fixed-step accumulator for determinism. Two rules carry over unchanged:
+never put per-frame values in React state, and stop when `paused` is true
+(`<Canvas frameloop={paused ? 'never' : 'always'}>` does it for you).
+
+Keep three.js out of the startup graph. `src/games/index.ts` imports every
+module eagerly for the registry, so make your `Surface` a thin shell that
+`lazy()`-imports the real game, as `PenFightSurface.tsx` does.
+
 > ⚠️ Seeding a pool from the JS thread must **assign the whole array**
 > (`pool.value = [...]`). Mutating `pool.value[i]` from JS only changes the
 > JS-side copy. Inside a worklet, mutate in place.

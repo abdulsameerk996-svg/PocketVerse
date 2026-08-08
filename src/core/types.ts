@@ -24,7 +24,14 @@ export type GameId =
   | 'fishing'
   | 'platformer'
   | 'rhythm'
-  | 'arcade';
+  | 'arcade'
+  | 'penfight'
+  // two-player, local
+  | 'airhockey'
+  | 'sumo'
+  | 'tankduel'
+  | 'colorclash'
+  | 'dodgeduel';
 
 /* ------------------------------------------------------------------ */
 /* Currency & rewards                                                  */
@@ -274,7 +281,17 @@ export type MetricKey =
   | 'songs_cleared'
   // arcade
   | 'arcade_rounds'
-  | 'arcade_high_score';
+  | 'arcade_high_score'
+  // pen fight
+  | 'penfight_matches'
+  | 'penfight_wins'
+  | 'penfight_knockouts'
+  | 'penfight_flicks'
+  // shared across the local two-player collection, so a quest can say
+  // "win 2 two-player matches" without naming a game
+  | 'versus_matches'
+  | 'versus_wins'
+  | 'versus_rounds';
 
 export type MetricDelta = Partial<Record<MetricKey, number>>;
 

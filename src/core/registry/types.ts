@@ -74,6 +74,20 @@ export type GameMeta = {
   tags: string[];
   /** Sorting weight in the arcade grid. */
   order: number;
+  /**
+   * Launcher section. Optional so every existing module keeps working
+   * untouched — anything without one is filed under 'arcade'.
+   */
+  category?: GameCategory;
+  /** How many people play at once. Defaults to 1. Drives the "· 2 Players" line. */
+  players?: 1 | 2;
+};
+
+export type GameCategory = 'arcade' | 'versus';
+
+export const CATEGORY_LABEL: Record<GameCategory, string> = {
+  arcade: 'ARCADE',
+  versus: '2 PLAYER',
 };
 
 export type GameModule = {

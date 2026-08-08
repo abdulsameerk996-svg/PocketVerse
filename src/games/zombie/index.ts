@@ -1,7 +1,6 @@
 import type { GameModule } from '@/core/registry';
 import { ZombieSurface } from './ZombieSurface';
-import { WEAPON_ITEMS } from './content';
-import type { ZombieSave } from './types';
+import { WEAPON_ITEMS, defaultZombieSave } from './content';
 
 export const zombieModule: GameModule = {
   id: 'zombie',
@@ -19,14 +18,7 @@ export const zombieModule: GameModule = {
   },
   Surface: ZombieSurface,
   items: WEAPON_ITEMS,
-  defaultSave: (): ZombieSave => ({
-    weapon: 'pistol',
-    unlockedWeapons: ['pistol'],
-    upgrades: { damage: 0, fireRate: 0, health: 0, pierce: 0 },
-    bestWave: 0,
-    totalKills: 0,
-    runs: 0,
-  }),
+  defaultSave: defaultZombieSave,
 
   quests: [
     {

@@ -28,6 +28,7 @@ import {
   useResponsive,
   play,
 } from '@/ui';
+import { HAS_KEYBOARD, useKeyPress } from '@/ui/hooks/useKeyboard';
 import type { RunnerSave } from './types';
 import { RUNNER_SKINS } from './content';
 
@@ -461,6 +462,27 @@ export function RunnerSurface({
     play('game.start');
   }, []);
 
+  /**
+   * Desktop controls. `moveLane`/`doJump`/`doSlide` are worklets, but calling
+   * one from the JS thread is fine — it simply runs here instead, and every
+   * shared value it touches accepts a JS-thread write.
+   */
+  const keys = useMemo(
+    () => ({
+      ArrowLeft: () => moveLane(-1),
+      a: () => moveLane(-1),
+      ArrowRight: () => moveLane(1),
+      d: () => moveLane(1),
+      ArrowUp: () => doJump(),
+      w: () => doJump(),
+      ' ': () => doJump(),
+      ArrowDown: () => doSlide(),
+      s: () => doSlide(),
+    }),
+    [doJump, doSlide, moveLane],
+  );
+  useKeyPress(!paused && !over, keys);
+
   return (
     <GestureDetector gesture={gesture}>
       <View style={styles.root}>
@@ -547,7 +569,9 @@ export function RunnerSurface({
 
         <View style={styles.hint} pointerEvents="none">
           <Text variant="caption" faint center>
-            swipe to switch lane · tap to jump · swipe down to slide
+            {HAS_KEYBOARD
+              ? '← → switch lane · ↑ / space jump · ↓ slide'
+              : 'swipe to switch lane · tap to jump · swipe down to slide'}
           </Text>
         </View>
       </View>

@@ -1,0 +1,7 @@
+# PocketVerse ships as a single-page app (`web.output: "single"` in app.json),
+# so there is exactly one HTML document and Expo Router resolves the rest on the
+# client. Without this rule a hard refresh or a shared link to a deep route —
+# /game/penfight, /modal/settings — would 404 on Cloudflare Pages.
+#
+# 200 rather than 301: the URL must stay put so the router can read it.
+/*    /index.html   200

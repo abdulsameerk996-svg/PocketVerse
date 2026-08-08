@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated from 'react-native-reanimated';
 
 import { allGames } from '@/core/registry';
+import type { GameCategory } from '@/core/registry';
 import { gradients } from '@/ui/theme/tokens';
 import { usePlayerStore } from '@/core/state/playerStore';
 import { scoreRepo } from '@/core/db/repositories';
@@ -24,8 +25,14 @@ import {
   useResponsive,
 } from '@/ui';
 
-const FILTERS = ['all', 'action', 'cosy', 'daily', 'levels'] as const;
+const FILTERS = ['all', 'action', 'versus', 'cosy', 'daily', 'levels'] as const;
 type Filter = (typeof FILTERS)[number];
+
+/** Section order in the launcher. Anything without a category is arcade. */
+const SECTIONS: { id: GameCategory; label: string; blurb: string }[] = [
+  { id: 'arcade', label: 'ARCADE', blurb: 'Solo runs, scores and streaks' },
+  { id: 'versus', label: '2 PLAYER', blurb: 'Same device, same keyboard, no mercy' },
+];
 
 /**
  * THE ARCADE GRID
@@ -53,10 +60,22 @@ export default function PlayScreen() {
 
   const visible = useMemo(() => {
     if (filter === 'all') return games;
-    if (filter === 'daily') return games.filter((g) => g.meta.tags.includes('daily'));
-    if (filter === 'levels') return games.filter((g) => g.meta.tags.includes('levels'));
     return games.filter((g) => g.meta.tags.includes(filter));
   }, [filter, games]);
+
+  /**
+   * Grouped into launcher sections. Nothing here knows which games exist — a
+   * module that declares `category: 'versus'` appears under 2 PLAYER the moment
+   * it is registered, and an empty section renders nothing.
+   */
+  const sections = useMemo(
+    () =>
+      SECTIONS.map((s) => ({
+        ...s,
+        games: visible.filter((g) => (g.meta.category ?? 'arcade') === s.id),
+      })).filter((s) => s.games.length > 0),
+    [visible],
+  );
 
   const cardW = (width - spacing.lg * 2 - spacing.md) / 2;
 
@@ -96,38 +115,44 @@ export default function PlayScreen() {
           ))}
         </ScrollView>
 
-        <View style={styles.grid}>
-          {visible.map((g, i) => {
-            const locked = player.level < g.meta.minLevel;
-            const affordable = g.meta.energyCost <= player.energy;
-            const best = bests[g.id];
-            return (
-              <GameCard
-                key={g.id}
-                index={i}
-                width={cardW}
-                title={g.meta.title}
-                tagline={g.meta.tagline}
-                glyph={g.meta.glyph}
-                accent={g.meta.accent}
-                gradient={gradients[g.meta.gradient]}
-                energy={g.meta.energyCost}
-                kind={g.meta.kind}
-                minLevel={g.meta.minLevel}
-                locked={locked}
-                affordable={affordable}
-                best={best}
-                onPress={() => {
-                  if (locked) {
-                    haptics.warn();
-                    return;
-                  }
-                  router.push(`/game/${g.id}`);
-                }}
-              />
-            );
-          })}
-        </View>
+        {sections.map((section) => (
+          <View key={section.id} style={{ gap: spacing.md }}>
+            <SectionHeader title={section.label} subtitle={section.blurb} />
+            <View style={styles.grid}>
+              {section.games.map((g, i) => {
+                const locked = player.level < g.meta.minLevel;
+                const affordable = g.meta.energyCost <= player.energy;
+                return (
+                  <GameCard
+                    key={g.id}
+                    index={i}
+                    width={cardW}
+                    title={g.meta.title}
+                    tagline={g.meta.tagline}
+                    glyph={g.meta.glyph}
+                    accent={g.meta.accent}
+                    gradient={gradients[g.meta.gradient]}
+                    energy={g.meta.energyCost}
+                    kind={g.meta.kind}
+                    minLevel={g.meta.minLevel}
+                    category={g.meta.category ?? 'arcade'}
+                    players={g.meta.players ?? 1}
+                    locked={locked}
+                    affordable={affordable}
+                    best={bests[g.id]}
+                    onPress={() => {
+                      if (locked) {
+                        haptics.warn();
+                        return;
+                      }
+                      router.push(`/game/${g.id}`);
+                    }}
+                  />
+                );
+              })}
+            </View>
+          </View>
+        ))}
 
         <Card variant="glass" style={{ marginTop: spacing.lg }} padding={spacing.lg}>
           <Text variant="subheading">One world, ten doors</Text>
@@ -153,6 +178,8 @@ function GameCard({
   energy,
   kind,
   minLevel,
+  category,
+  players,
   locked,
   affordable,
   best,
@@ -168,12 +195,18 @@ function GameCard({
   energy: number;
   kind: 'session' | 'ambient';
   minLevel: number;
+  category: GameCategory;
+  players: 1 | 2;
   locked: boolean;
   affordable: boolean;
   best?: number;
   onPress: () => void;
 }) {
   const entrance = useEntrance(index);
+  // "Air Hockey · 2 Players" — the line the launcher brief asked for.
+  const subtitle = `${category === 'versus' ? '2 Player' : 'Arcade'} · ${
+    players === 2 ? '2 Players' : '1 Player'
+  }`;
 
   return (
     <Animated.View style={entrance}>
@@ -188,7 +221,13 @@ function GameCard({
 
         <View style={styles.cardTop}>
           <Text size={36}>{locked ? '🔒' : glyph}</Text>
-          {kind === 'ambient' ? (
+          {players === 2 ? (
+            <View style={[styles.tag, { borderColor: `${accent}88` }]}>
+              <Text variant="micro" color={accent}>
+                2P
+              </Text>
+            </View>
+          ) : kind === 'ambient' ? (
             <View style={[styles.tag, { borderColor: `${accent}88` }]}>
               <Text variant="micro" color={accent}>
                 LIVE
@@ -199,6 +238,9 @@ function GameCard({
 
         <Text variant="subheading" numberOfLines={1}>
           {title}
+        </Text>
+        <Text variant="micro" color={accent} numberOfLines={1}>
+          {subtitle}
         </Text>
         <Text variant="caption" muted numberOfLines={2} style={styles.tagline}>
           {locked ? `Unlocks at account level ${minLevel}` : tagline}

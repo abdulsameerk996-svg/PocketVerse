@@ -11,6 +11,12 @@ import { fishingModule } from './fishing';
 import { platformerModule } from './platformer';
 import { rhythmModule } from './rhythm';
 import { arcadeModule } from './arcade';
+import { penfightModule } from './penfight';
+import { airHockeyModule } from './airhockey';
+import { sumoModule } from './sumo';
+import { tankDuelModule } from './tankduel';
+import { colorClashModule } from './colorclash';
+import { dodgeDuelModule } from './dodgeduel';
 
 /**
  * ============================================================================
@@ -32,6 +38,14 @@ export const GAME_MODULES = [
   platformerModule,
   rhythmModule,
   arcadeModule,
+  penfightModule,
+
+  // 2 PLAYER — local, same device
+  airHockeyModule,
+  sumoModule,
+  tankDuelModule,
+  colorClashModule,
+  dodgeDuelModule,
 ];
 
 let registered = false;

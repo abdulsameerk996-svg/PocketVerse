@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BackHandler, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { getGame } from '@/core/registry';
+import { useBackGuard } from '@/core/hooks/useBackGuard';
 import type { GameSurfaceProps } from '@/core/registry';
 import type { MetricDelta, RewardBundle, SessionResult } from '@/core/types';
 import { usePlayerStore } from '@/core/state/playerStore';
@@ -78,17 +79,18 @@ export default function GameHost() {
     };
   }, [setInGame]);
 
-  /* --------------------------------------------------- hardware back */
-  useEffect(() => {
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (stage === 'playing' && !ambient) {
-        setPaused(true);
-        return true;
-      }
-      return false;
-    });
-    return () => sub.remove();
+  /* ------------------------------------- back / escape while playing */
+  const onBack = useCallback(() => {
+    if (stage === 'playing' && !ambient) {
+      setPaused(true);
+      return true;
+    }
+    return false;
   }, [ambient, stage]);
+
+  // Android's back button; Escape in a browser. See `useBackGuard.web.ts` for
+  // why the browser's own Back button is left alone.
+  useBackGuard(true, onBack);
 
   /* ------------------------------------------------------- lifecycle */
 

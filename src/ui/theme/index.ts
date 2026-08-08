@@ -1,2 +1,2 @@
 export * from './tokens';
-export { useResponsive, responsive } from './responsive';
+export { useResponsive, responsive, MAX_FRAME_WIDTH } from './responsive';
