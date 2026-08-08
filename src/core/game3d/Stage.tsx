@@ -4,6 +4,7 @@ import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
 import { GameCanvas } from './GameCanvas';
+import { finiteOr, safeCameraDir } from './safe';
 
 /**
  * ============================================================================
@@ -141,7 +142,10 @@ export function useFitCamera(dir: [number, number, number], fit: StageFit) {
     const cam = camera as THREE.PerspectiveCamera;
     if (!cam.isPerspectiveCamera || size.width === 0 || size.height === 0) return;
 
-    const unit = new THREE.Vector3(...dir).normalize();
+    // A zero-length or poisoned direction would normalise to NaN and render a
+    // blank scene — sanitise before any camera math (see `safe.ts`).
+    const [dx, dy, dz] = safeCameraDir(dir);
+    const unit = new THREE.Vector3(dx, dy, dz).normalize();
     const corners: THREE.Vector3[] = [];
     for (const sx of [-1, 1]) {
       for (const sz of [-1, 1]) {
@@ -153,7 +157,7 @@ export function useFitCamera(dir: [number, number, number], fit: StageFit) {
 
     cam.aspect = size.width / size.height;
 
-    let dist = new THREE.Vector3(...dir).length() || 20;
+    let dist = Math.hypot(dx, dy, dz) || 20;
     for (let i = 0; i < 18; i++) {
       cam.position.copy(unit).multiplyScalar(dist);
       cam.lookAt(0, 0, 0);
@@ -167,10 +171,13 @@ export function useFitCamera(dir: [number, number, number], fit: StageFit) {
         const p = c.clone().project(cam);
         worst = Math.max(worst, Math.abs(p.x), Math.abs(p.y));
       }
+      // A poisoned projection (camera still invalid mid-solve) must abort the
+      // solve rather than NaN the distance for the rest of the loop.
+      if (!Number.isFinite(worst) || worst < 1e-9) break;
       if (Math.abs(worst - margin) < 0.004) break;
       // Projected extent is near-linear in 1/distance across these corrections,
       // so scaling by the overflow ratio converges in a handful of steps.
-      dist *= worst / margin;
+      dist = finiteOr((dist * worst) / margin, 20);
     }
   }, [camera, size.width, size.height, dir, halfWidth, halfDepth, height, margin]);
 }

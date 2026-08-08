@@ -55,9 +55,11 @@ src/
 ├─ ui/
 │  ├─ theme/                  design tokens + responsive scaling
 │  │
-│  │  (games/penfight has a scene/ folder and games/frontier a Scene.tsx —
-│  │   the 3D modules. Both are lazy-imported so three.js never loads unless
-│  │   you open one.)
+│  │  (3D modules: penfight has a scene/ folder, frontier a Scene.tsx, and
+│  │   the five versus games use lazy surfaces — see `createLazySurface`.
+│  │   Pen Fight and the versus games stay behind dynamic imports so
+│  │   three.js never loads unless one of them opens; Frontier is eager so
+│  │   its chunk is warm for the flagship.)
 │  ├─ components/             Screen, Card, Button, ItemTile, AvatarView, …
 │  ├─ fx/                     particles, confetti, shimmer, starfield
 │  ├─ game/                   GameHud, PauseSheet, ResultsSheet, LiveValue

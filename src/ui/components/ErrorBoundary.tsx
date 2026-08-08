@@ -63,6 +63,13 @@ export class ErrorBoundary extends React.Component<
             <Text variant="micro" color={palette.textFaint} numberOfLines={4}>
               {error.message || String(error)}
             </Text>
+            {/* Development-only: the actual stack, so a renderer failure is
+                diagnosable from the screen itself. Stripped in production. */}
+            {__DEV__ && error.stack ? (
+              <Text variant="micro" color={palette.textFaint} numberOfLines={8} style={styles.errorStack}>
+                {error.stack.split('\n').slice(0, 8).join('\n')}
+              </Text>
+            ) : null}
           </View>
           <View style={styles.actions}>
             <Button label="Back" variant="secondary" size="sm" onPress={this.props.onBack} style={{ flex: 1 }} />
@@ -93,6 +100,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.04)',
     borderWidth: 1,
     borderColor: palette.hairline,
+    gap: spacing.xs,
   },
+  errorStack: { marginTop: spacing.xs, borderTopWidth: 1, borderTopColor: palette.hairline, paddingTop: spacing.xs },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
 });

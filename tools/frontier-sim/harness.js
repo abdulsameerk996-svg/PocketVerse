@@ -293,6 +293,88 @@ console.log('\nSave normalisation');
   check('negative values clamped', s.permanent.moveSpeed === 0.03 && s.bestTime === 0);
 }
 
+console.log('\nCorner hold — 20,000 movement steps');
+// The repair-pass requirement: a character rammed into every corner for 20k
+// steps must stay finite, stay in bounds, and be able to move away afterwards.
+// The player is made immortal so the fuzz targets movement stability rather
+// than combat survival — `invuln > 0` blocks all damage in `step`.
+{
+  const corners = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+  let violations = 0;
+  corners.forEach(([dx, dz], ci) => {
+    const w = createRun(7000 + ci, defaultFrontierSave(), { speed: 0, armor: 0, luck: 0 });
+    w.player.invuln = 1e9;
+    const input = idle({ mx: dx, mz: dz });
+    // The run legitimately freezes on the level-up picker; a real player picks
+    // an upgrade, so the fuzz does too (first choice, deterministically).
+    const settle = () => {
+      if (w.choosing && w.upgradeChoices.length) applyUpgrade(w, w.upgradeChoices[0]);
+    };
+    let bad = 0;
+    for (let i = 0; i < 20000; i++) {
+      step(w, input, FIXED_DT);
+      settle();
+      if (i % 1000 === 0 || i === 19999) {
+        if (!Number.isFinite(w.player.x) || !Number.isFinite(w.player.z)) bad += 1;
+        if (Math.abs(w.player.x) >= HALF_W || Math.abs(w.player.z) >= HALF_W) bad += 1;
+      }
+    }
+    // Escape: release the corner, push away, confirm movement recovers.
+    const escape = idle({ mx: -dx, mz: -dz });
+    const sx = w.player.x;
+    const sz = w.player.z;
+    for (let i = 0; i < 120; i++) {
+      step(w, escape, FIXED_DT);
+      settle();
+    }
+    const moved = Math.hypot(w.player.x - sx, w.player.z - sz);
+    check(
+      `corner (${dx},${dz}): 20k steps finite + in bounds`,
+      bad === 0,
+      bad ? `${bad} violations` : `${Math.round(w.time)}s simulated`,
+    );
+    check(`corner (${dx},${dz}): player escapes`, moved > 0.5, `moved ${moved.toFixed(2)}`);
+    violations += bad;
+  });
+}
+
+console.log('\nRender readiness (frame-1 scene state)');
+// What the R3F scene needs on its first frame to show anything at all: a
+// finite player inside the world, a finite ground half-extent, a finite
+// objective target, landmarks to draw, an enemy pool that spawns quickly, and
+// pool sizes that match the scene's instanced meshes.
+{
+  const w = createRun(9001, defaultFrontierSave(), { speed: 0, armor: 0, luck: 0 });
+  const p = w.player;
+  check('player finite on spawn', fin(p.x) && fin(p.z));
+  check('player inside world bounds', Math.abs(p.x) < HALF_W && Math.abs(p.z) < HALF_W, `${p.x.toFixed(1)},${p.z.toFixed(1)}`);
+  check('ground half-extent finite and positive', fin(HALF_W) && HALF_W > 0, `HALF_W=${HALF_W}`);
+  check('objective has finite target', fin(w.objective.x) && fin(w.objective.z), `${w.objective.x.toFixed(1)},${w.objective.z.toFixed(1)}`);
+  check(
+    'landmarks finite and in bounds',
+    w.landmarks.length > 0 && w.landmarks.every((l) => fin(l.x) && fin(l.z) && Math.abs(l.x) < HALF_W && Math.abs(l.z) < HALF_W),
+    `${w.landmarks.length} landmarks`,
+  );
+  let spawned = false;
+  for (let i = 0; i < 600 && !spawned; i++) {
+    step(w, idle({}), FIXED_DT);
+    spawned = w.enemies.some((e) => e.active);
+  }
+  const active = w.enemies.filter((e) => e.active);
+  check('enemies spawn within 10 s', active.length > 0, `${active.length} active`);
+  check(
+    'active enemies finite + in bounds',
+    active.every((e) => fin(e.x) && fin(e.z) && Math.abs(e.x) < HALF_W && Math.abs(e.z) < HALF_W),
+    `${active.length} active`,
+  );
+  check(
+    'pools sized for instancing',
+    w.enemies.length === ENEMY_POOL && w.pickups.length === PICKUP_POOL &&
+      w.projectiles.length === PROJ_POOL && w.teles.length === TELE_POOL,
+    `${ENEMY_POOL}/${PICKUP_POOL}/${PROJ_POOL}/${TELE_POOL}`,
+  );
+}
+
 console.log(failures === 0 ? '\nALL FRONTIER CHECKS PASSED' : `\n${failures} FRONTIER CHECK(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
 
