@@ -29,9 +29,14 @@ export default function Root({ children }: PropsWithChildren) {
         />
 
         <title>PocketVerse</title>
+        {/*
+          Keep this in sync with the live registry (src/games/index.ts) — it is
+          the source of truth for the HTML shell and overrides app.json's web
+          description in the static export.
+        */}
         <meta
           name="description"
-          content="Eleven games, one avatar, one inventory, one save file. Offline-first, no account, no network."
+          content="Twenty-eight games, one avatar, one inventory, one save file. Offline-first, no account, no network."
         />
 
         {/* ── PWA ─────────────────────────────────────────────────────── */}
@@ -52,7 +57,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta property="og:title" content="PocketVerse" />
         <meta
           property="og:description"
-          content="Eleven games, one avatar, one inventory, one save file."
+          content="Twenty-eight games, one avatar, one inventory, one save file."
         />
         <meta property="og:type" content="website" />
         <meta property="og:image" content="/icons/icon-512.png" />
