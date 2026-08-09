@@ -23,10 +23,10 @@ export default function Root({ children }: PropsWithChildren) {
           content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover"
         />
 
-        <title>Donut Tycoon</title>
+        <title>PocketVerse Arcade</title>
         <meta
           name="description"
-          content="Tap donuts, hire a café crew and grow an empire — an idle tycoon that keeps earning even while you're away. Offline-first, no account, no network."
+          content="Two games, one arcade: Donut Tycoon's idle café empire and Neon Rings' bounce-and-launch reflex runs. Offline-first, no account, no network."
         />
 
         {/* ── PWA ─────────────────────────────────────────────────────── */}
@@ -44,8 +44,8 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
 
         {/* ── Social ──────────────────────────────────────────────────── */}
-        <meta property="og:title" content="Donut Tycoon" />
-        <meta property="og:description" content="Tap donuts, build a café empire, earn while you're away." />
+        <meta property="og:title" content="PocketVerse Arcade" />
+        <meta property="og:description" content="Donut Tycoon idle café empire + Neon Rings reflex runs — two games, offline-first." />
         <meta property="og:type" content="website" />
         <meta property="og:image" content="/icons/icon-512.png" />
         <meta name="twitter:card" content="summary" />

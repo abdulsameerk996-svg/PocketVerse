@@ -13,6 +13,7 @@
     "icons": "node tools/icons/generate.js",
     "typecheck": "tsc --noEmit",
     "sim:tycoon": "tsc -p tools/tycoon-sim && node tools/tycoon-sim/harness.js",
+    "sim:rings": "tsc -p tools/rings-sim && node tools/rings-sim/harness.js",
     "lint": "expo lint",
     "doctor": "npx expo-doctor"
   },

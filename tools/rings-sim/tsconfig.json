@@ -1,0 +1,19 @@
+{
+  "//": "Standalone on purpose. Only the pure modules compile — the store/screen import react-native and are excluded.",
+  "compilerOptions": {
+    "outDir": "build",
+    "rootDir": "../../src",
+    "module": "commonjs",
+    "target": "es2020",
+    "moduleResolution": "node",
+    "strict": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "baseUrl": "../..",
+    "paths": { "@/*": ["src/*"] }
+  },
+  "files": [
+    "../../src/ui/utils/rng.ts",
+    "../../src/rings/logic.ts"
+  ]
+}
