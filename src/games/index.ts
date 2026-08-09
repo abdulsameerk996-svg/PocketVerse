@@ -1,81 +1,38 @@
 import { registerGames } from '@/core/registry';
 import { invalidateCatalog } from '@/content/catalog';
 
-import { petModule } from './pet';
-import { runnerModule } from './runner';
-import { drivingModule } from './driving';
-import { puzzleModule } from './puzzle';
-import { zombieModule } from './zombie';
-import { farmModule } from './farm';
-import { fishingModule } from './fishing';
-import { platformerModule } from './platformer';
-import { rhythmModule } from './rhythm';
-import { arcadeModule } from './arcade';
-import { penfightModule } from './penfight';
-import { airHockeyModule } from './airhockey';
-import { sumoModule } from './sumo';
-import { tankDuelModule } from './tankduel';
-import { colorClashModule } from './colorclash';
-import { dodgeDuelModule } from './dodgeduel';
-import { frontierModule } from './frontier';
-// Phase 7 quick-play collection
-import { stackRushModule } from './stackrush';
-import { colorSnapModule } from './colorsnap';
-import { survive60Module } from './survive60';
-import { hookRunModule } from './hookrun';
-import { towerDefModule } from './towerdef';
-// Phase 8 quick-play collection
-import { dodgeRainModule } from './dodgerain';
-import { oneTapModule } from './onetap';
-import { numMergeModule } from './nummerge';
-import { laserSurviveModule } from './lasersurvive';
-import { memRushModule } from './memrush';
-import { orbitGuardModule } from './orbitguard';
+import { nexusArenaModule } from './nexusarena';
 
 /**
  * ============================================================================
- *  THE ONLY FILE THAT CHANGES WHEN A GAME IS ADDED
+ *  POCKETVERSE PARTY REBUILD — SINGLE FLAGSHIP
  * ============================================================================
  *
- * Import the module, add it to the array. Everything downstream — the arcade
- * grid, the quest pool, the achievement list, the item catalog, offline
- * simulation, save hydration, the router — discovers it from the registry.
+ * Quality > Quantity.
+ * After audit, we hard-reset the broken collection of 32 mediocre games.
+ * The user-facing list is now SMALL and HIGH QUALITY.
+ *
+ * ONE FLAGSHIP: PocketVerse: Nexus Arena
+ *   - 3D Arena Battle, 3-player FFA (4p architecture), bots, polished
+ *
+ * Reusable infra preserved:
+ * - game host (app/game/[id].tsx)
+ * - save system (core/db, state, save)
+ * - audio (ui/hooks/useSound)
+ * - input (game3d/useDuelInput, TouchSticks, useKeyboard)
+ * - 3D renderer (GameCanvas, Stage, FallbackScene, safety, PartyCharacter, PartyCamera)
+ * - physics (arena2d)
+ * - reward (services/rewards)
+ * - navigation (expo-router)
+ * - asset utilities (sprites)
+ *
+ * All other games are deprecated from the visible catalogue.
+ * Their folders remain for reference but are not registered.
+ * To restore a game, add its module back to GAME_MODULES and ensure it has unique logo.
  */
+
 export const GAME_MODULES = [
-  // FLAGSHIP — the big game
-  frontierModule,
-
-  // QUICK PLAY — one-minute, score-chasing runs
-  stackRushModule,
-  colorSnapModule,
-  survive60Module,
-  hookRunModule,
-  towerDefModule,
-  dodgeRainModule,
-  oneTapModule,
-  numMergeModule,
-  laserSurviveModule,
-  memRushModule,
-  orbitGuardModule,
-
-  petModule,
-  runnerModule,
-  drivingModule,
-  puzzleModule,
-  zombieModule,
-  farmModule,
-  fishingModule,
-  platformerModule,
-  rhythmModule,
-  arcadeModule,
-  penfightModule,
-
-  // 2 PLAYER — local, same device
-  airHockeyModule,
-  sumoModule,
-  tankDuelModule,
-  colorClashModule,
-  dodgeDuelModule,
+  nexusArenaModule,
 ];
 
 let registered = false;

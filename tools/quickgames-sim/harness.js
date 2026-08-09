@@ -471,22 +471,30 @@ console.log('\nOrbit Guard');
 
   // A parked shield covering its half of the ring blocks everything aligned.
   const d = ORBIT.makeOrbit();
+  d.nextSpawn = 999;
+  d.eliteTimer = 999;
   d.orbs[0].active = true;
   d.orbs[0].angle = 0;
   d.orbs[0].dist = 0.4;
   d.orbs[0].speed = 0.1;
+  d.orbs[0].kind = 'normal';
+  d.orbs[0].hp = 1;
   ORBIT.stepOrbit(d, Math.random, 1 / 60, 0);
   check('orb inside the shield arc is deflected', d.orbs[0].active === false && d.blocks === 1);
 
   // An orb aimed away from the shield reaches the core.
   const h = ORBIT.makeOrbit();
+  h.nextSpawn = 999; // isolate single orb — no auto spawns
+  h.eliteTimer = 999;
   h.orbs[0].active = true;
   h.orbs[0].angle = Math.PI; // opposite the shield at 0
   h.orbs[0].dist = 0.4;
   h.orbs[0].speed = 0.5;
+  h.orbs[0].kind = 'normal';
+  h.orbs[0].hp = 1;
   let hits = 0;
   for (let i = 0; i < 200 && !h.over; i++) hits += ORBIT.stepOrbit(h, Math.random, 1 / 60, 0);
-  check('shielded-away orb hits the core', hits === 1 && h.hp === 2, `hp=${h.hp}`);
+  check('shielded-away orb hits the core', hits === 1 && h.hp === 2, `hp=${h.hp} hits=${hits}`);
   check('three core hits end the run', h.over === false);
 }
 

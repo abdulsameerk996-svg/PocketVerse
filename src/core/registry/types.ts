@@ -79,8 +79,8 @@ export type GameMeta = {
    * untouched — anything without one is filed under 'arcade'.
    */
   category?: GameCategory;
-  /** How many people play at once. Defaults to 1. Drives the "· 2 Players" line. */
-  players?: 1 | 2;
+  /** How many people play at once. Defaults to 1. */
+  players?: 1 | 2 | 3 | 4;
   /** Difficulty chip on the launcher card. Optional; absent cards show nothing. */
   difficulty?: 'easy' | 'medium' | 'hard';
   /** Typical session length, shown on the launcher card (e.g. '2 min'). */

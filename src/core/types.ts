@@ -46,7 +46,14 @@ export type GameId =
   | 'nummerge'
   | 'lasersurvive'
   | 'memrush'
-  | 'orbitguard';
+  | 'orbitguard'
+  // flagship-quality overhaul (Phase 9)
+  | 'pocketrun'
+  | 'survivors'
+  | 'pocketarena'
+  | 'pool'
+  // single flagship rebuild (Nexus Arena)
+  | 'nexusarena';
 
 /* ------------------------------------------------------------------ */
 /* Currency & rewards                                                  */
@@ -337,7 +344,27 @@ export type MetricKey =
   | 'memrush_score'
   | 'memrush_streak'
   | 'orbitguard_time'
-  | 'orbitguard_blocks';
+  | 'orbitguard_blocks'
+  // Phase 9 flagship
+  | 'pocketrun_distance'
+  | 'pocketrun_coins'
+  | 'pocketrun_score'
+  | 'pocketrun_best'
+  | 'pocketrun_combos'
+  | 'pocketrun_nearmiss'
+  | 'survivors_time'
+  | 'survivors_kills'
+  | 'survivors_level'
+  | 'survivors_bosses'
+  | 'survivors_gold'
+  | 'arena_matches'
+  | 'arena_wins'
+  | 'arena_crystals'
+  | 'arena_kos'
+  | 'pool_matches'
+  | 'pool_wins'
+  | 'pool_shots'
+  | 'pool_pockets';
 
 export type MetricDelta = Partial<Record<MetricKey, number>>;
 
@@ -362,6 +389,10 @@ export const METRIC_MODE: Partial<Record<MetricKey, 'sum' | 'max'>> = {
   memrush_score: 'max',
   memrush_streak: 'max',
   orbitguard_time: 'max',
+  pocketrun_best: 'max',
+  pocketrun_score: 'max',
+  survivors_time: 'max',
+  survivors_level: 'max',
 };
 
 /* ------------------------------------------------------------------ */

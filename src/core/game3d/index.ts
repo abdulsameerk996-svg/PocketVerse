@@ -23,6 +23,11 @@
 
 export { GameCanvas } from './GameCanvas';
 export type { GameCanvasProps } from './canvasProps';
+export * as safety from './safety';
+export { SafetyDiagnostics } from './safety/Diagnostics';
+export { FallbackScene, diagnoseRenderer } from './FallbackScene';
+export { PartyCharacter, PLAYER_COLORS, CHARACTER_SKINS } from './PartyCharacter';
+export { PartyCamera } from './PartyCamera';
 
 export { Stage, useFitCamera } from './Stage';
 export type { StageProps, StageFit } from './Stage';

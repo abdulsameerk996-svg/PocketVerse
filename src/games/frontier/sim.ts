@@ -2,7 +2,6 @@ import { createRng } from '../../core/utils/rng';
 import { BOSSES, BIOMES, ENEMIES, HALF_W, UPGRADE_MAP } from './content';
 import { biomeAt, makeLandmarks } from './world';
 import type {
-  ActiveEvent,
   BiomeId,
   Boss,
   BossId,
@@ -32,9 +31,10 @@ import type {
  * same code runs on the render thread in the app and headlessly in
  * `tools/frontier-sim`, so the harness tests exactly what ships.
  *
- * Rendering never reads state here except through `step`; presentation events
- * (sounds, banners) are queued on `world.sfx` / `world.banner` and drained by
- * the shell.
+ * Guarantees:
+ *  - player spawns at 0,0 inside world, inside camera frustum
+ *  - guaranteed scenery (see world.ts decorations) and enemies near spawn
+ *  - first 10s deterministic: no random events, fast first spawn
  */
 
 export const FIXED_DT = 1 / 60;
@@ -65,7 +65,6 @@ export function createRun(
 ): World {
   const player = makePlayer(save, modifiers.armor);
   const landmarks = makeLandmarks(seed);
-  void modifiers;
   const bossLandmarks = landmarks.filter((l) => l.kind === 'boss');
   const objective = bossLandmarks[0] ?? landmarks[0];
 
@@ -85,7 +84,7 @@ export function createRun(
     active: false, x: 0, z: 0, r: 1, ttl: 0, phase: 0, color: '#fff', dmg: 0, dmgEnemies: 0,
   }));
 
-  return {
+  const world: World = {
     seed,
     rand: createRng(seed ^ 0x51ab),
     time: 0,
@@ -108,8 +107,8 @@ export function createRun(
       kills: 0, elites: 0, bosses: 0, landmarks: 0, gems: 0, rares: 0,
       time: 0, bossesDefeated: [], upgradesTaken: [],
     },
-    spawnTimer: 1.2,
-    eventTimer: 30,
+    spawnTimer: 0.35,
+    eventTimer: 32,
     luck: modifiers.luck,
     mods: {
       damage: 1, attackSpeed: 1, moveSpeed: modifiers.speed, maxHp: 0, crit: 0.05,
@@ -125,6 +124,13 @@ export function createRun(
     hurtFlash: 0,
     sfx: [] as string[],
   };
+
+  // No immediate pre-spawned enemies — the fast spawnTimer (0.35s) guarantees
+  // an enemy pack within the first second, satisfying "near at least one enemy"
+  // without breaking the event harness which expects idle runs to avoid rapid
+  // level-ups. Decorations are guaranteed via world.ts, not enemies.
+
+  return world;
 }
 
 /* ---------------------------------------------------------- low level ---- */
@@ -221,7 +227,6 @@ function damageEnemy(w: World, e: Enemy, dmg: number, kx: number, kz: number): v
     const elite = e.elite || e.boss;
     w.stats.kills += 1;
     if (elite) w.stats.elites += 1;
-    // Loot table — luck shifts the rare rolls.
     dropPickup(w, 'gem', e.x + (w.rand() - 0.5) * 0.6, e.z + (w.rand() - 0.5) * 0.6);
     if (e.elite) {
       dropPickup(w, 'rare', e.x, e.z);
@@ -267,7 +272,6 @@ function burstEnemies(w: World, x: number, z: number, r: number, dmg: number, kn
   }
 }
 
-/** Melee arc damage in front of the player. */
 function arcHit(w: World, range: number, halfAngle: number, dmg: number, knock: number): void {
   const p = w.player;
   const fx = Math.cos(p.facing);
@@ -444,7 +448,6 @@ function spawnPack(w: World): void {
       break;
     }
   }
-  // Occasional elite replacement once the run has warmed up.
   if (w.time > 45 && (w.biome === 'ruins' || w.biome === 'danger') && w.rand() < 0.14) {
     spawnEnemy(w, 'elite', w.player.x + (w.rand() - 0.5) * 8, w.player.z + (w.rand() - 0.5) * 8, hpMul, dmgMul);
     return;
@@ -467,7 +470,6 @@ function stepPlayer(w: World, input: FrontierInput, dt: number): void {
   const p = w.player;
   if (w.over) return;
 
-  // decay timers that should tick even while choosing an upgrade
   p.invuln = Math.max(0, p.invuln - dt);
   p.hurtT = Math.max(0, p.hurtT - dt);
   w.hurtFlash = Math.max(0, w.hurtFlash - dt * 3);
@@ -484,7 +486,6 @@ function stepPlayer(w: World, input: FrontierInput, dt: number): void {
 
   if (w.choosing) return;
 
-  // ------------------------------------------------------------- movement
   const speedMul =
     (1 + w.mods.moveSpeed) *
     (1 + w.permanent.moveSpeed) *
@@ -494,7 +495,6 @@ function stepPlayer(w: World, input: FrontierInput, dt: number): void {
   p.sprinting = sprintOn;
   const speed = 7.4 * speedMul * (sprintOn ? 1.5 : 1) * (p.dashT > 0 ? 3.4 : 1);
 
-  // dash
   if (input.dash && p.dashCd <= 0 && p.dashT <= 0) {
     p.dashT = 0.22;
     p.dashCd = 2.4 * (1 - w.mods.dashCd);
@@ -525,11 +525,9 @@ function stepPlayer(w: World, input: FrontierInput, dt: number): void {
   p.x = clamp(p.x + p.vx * dt, -HALF_W + 0.6, HALF_W - 0.6);
   p.z = clamp(p.z + p.vz * dt, -HALF_W + 0.6, HALF_W - 0.6);
 
-  // ------------------------------------------------------------- attacks
   const dmgBase =
     26 * (1 + w.mods.damage) * (1 + w.permanent.damage) * (w.buffT > 0 && w.buffKind === 0 ? 1.4 : 1);
 
-  // melee — windup then one swing
   if (p.attackWindup > 0) {
     p.attackWindup -= dt;
     if (p.attackWindup <= 0) {
@@ -547,7 +545,6 @@ function stepPlayer(w: World, input: FrontierInput, dt: number): void {
     w.sfx.push('game.hit');
   }
 
-  // ranged — auto-fires at the nearest enemy (thumb friendly)
   if (p.rangedCd <= 0) {
     const target = nearestEnemy(w, 15);
     if (target) {
@@ -561,7 +558,6 @@ function stepPlayer(w: World, input: FrontierInput, dt: number): void {
     }
   }
 
-  // ability — Nova
   if (input.ability && p.abilityCd <= 0) {
     p.abilityCd = 9;
     const dmg = dmgBase * 2.6 * w.mods.ability;
@@ -592,7 +588,6 @@ function stepEnemies(w: World, dt: number): void {
     const nx = dx / d;
     const nz = dz / d;
 
-    // ----- behaviour per species
     let moveX = 0;
     let moveZ = 0;
     const def = ENEMIES[e.kind];
@@ -604,7 +599,6 @@ function stepEnemies(w: World, dt: number): void {
         moveX = nx; moveZ = nz;
         break;
       case 'ranged': {
-        // keep a band of distance
         if (d < 5.5) { moveX = -nx; moveZ = -nz; }
         else if (d > 9.5) { moveX = nx; moveZ = nz; }
         if (e.fireCd <= 0 && d < 14) {
@@ -617,7 +611,7 @@ function stepEnemies(w: World, dt: number): void {
         moveX = nx; moveZ = nz;
         if (d < 7 && e.attackCd <= 0) {
           e.telegraph = 0.55;
-          e.telegraphKind = 0; // charge
+          e.telegraphKind = 0;
           e.attackCd = 2.4;
         }
         break;
@@ -629,18 +623,16 @@ function stepEnemies(w: World, dt: number): void {
         moveX = nx; moveZ = nz;
         if (d < 4.6 && e.attackCd <= 0) {
           e.telegraph = 0.75;
-          e.telegraphKind = 1; // slam ring
+          e.telegraphKind = 1;
           e.attackCd = 2.8;
         }
         break;
       }
     }
 
-    // ----- telegraph resolution
     if (e.telegraph > 0) {
       e.telegraph -= dt;
       if (e.telegraphKind === 0) {
-        // charge: lock direction, dash forward
         e.vx = nx * e.speed * 3.4;
         e.vz = nz * e.speed * 3.4;
         if (e.telegraph <= 0) e.attackCd = Math.max(e.attackCd, 0.6);
@@ -654,18 +646,15 @@ function stepEnemies(w: World, dt: number): void {
       e.vz = moveZ * e.speed;
     }
 
-    // knockback + integrate
     e.x = clamp(e.x + (e.vx + e.kx) * dt, -HALF_W + 0.4, HALF_W - 0.4);
     e.z = clamp(e.z + (e.vz + e.kz) * dt, -HALF_W + 0.4, HALF_W - 0.4);
     e.dirX = nx;
     e.dirZ = nz;
 
-    // ----- contact damage
     if (d < e.r + 0.55 + 0.12 && e.attackCd <= 0) {
       damagePlayer(w, def.damage, e.x, e.z, 6);
       e.attackCd = def.attackCd;
       if (e.kind === 'chaser') {
-        // chasers lunge past instead of sticking
         e.vx += nx * 6;
         e.vz += nz * 6;
       }
@@ -714,7 +703,6 @@ function stepBoss(w: World, dt: number): void {
   b.t += dt;
   b.hitFlash = Math.max(0, b.hitFlash - dt);
 
-  // phase transitions
   const nextPhase = b.hp > b.maxHp * BOSS_PHASE_HP[0] ? 1 : b.hp > b.maxHp * BOSS_PHASE_HP[1] ? 2 : 3;
   if (nextPhase !== b.phase) {
     b.phase = nextPhase;
@@ -749,7 +737,6 @@ function stepBoss(w: World, dt: number): void {
   const nx = dx / d;
   const nz = dz / d;
 
-  // chase (orbs keep mid distance, rootbeast keeps close, warden charges)
   const speed = def.speed * bossEnrageScale(b);
   const want =
     b.id === 'voidengine' ? (d > 10 ? 1 : d < 6 ? -1 : 0)
@@ -761,12 +748,10 @@ function stepBoss(w: World, dt: number): void {
   b.x = clamp(b.x + b.vx * dt, -HALF_W + b.r, HALF_W - b.r);
   b.z = clamp(b.z + b.vz * dt, -HALF_W + b.r, HALF_W - b.r);
 
-  // contact damage
   if (d < b.r + 0.7) {
     damagePlayer(w, def.damage * bossEnrageScale(b), b.x, b.z, 8);
   }
 
-  // attack cadence
   b.attackT -= dt;
   if (b.attackT <= 0) {
     b.attackT = 2.6 - b.phase * 0.45;
@@ -781,31 +766,30 @@ function startBossAttack(w: World, b: Boss): void {
   const d = Math.hypot(dx, dz) || 1;
   const nx = dx / d;
   const nz = dz / d;
-  const base = Math.atan2(nz, nx);
 
   if (b.id === 'warden') {
     if (w.rand() < 0.45) {
       b.telegraph = 0.6;
-      b.telegraphKind = 0; // charge
+      b.telegraphKind = 0;
     } else {
       b.telegraph = 0.8;
-      b.telegraphKind = 1; // slam ring
+      b.telegraphKind = 1;
     }
   } else if (b.id === 'rootbeast') {
     if (w.rand() < 0.5) {
       b.telegraph = 0.7;
-      b.telegraphKind = 2; // thorn fan
+      b.telegraphKind = 2;
     } else {
       b.telegraph = 0.85;
-      b.telegraphKind = 1; // root nova ring
+      b.telegraphKind = 1;
     }
   } else {
     if (w.rand() < 0.4) {
       b.telegraph = 0.65;
-      b.telegraphKind = 3; // void orb fan
+      b.telegraphKind = 3;
     } else {
       b.telegraph = 0.9;
-      b.telegraphKind = 4; // teleport slam
+      b.telegraphKind = 4;
     }
   }
 }
@@ -819,17 +803,17 @@ function resolveBossTelegraph(w: World, b: Boss): void {
   const base = Math.atan2(dz, dx);
 
   switch (b.telegraphKind) {
-    case 0: { // warden charge
+    case 0: {
       b.vx = Math.cos(base) * def.speed * 7.5 * scale;
       b.vz = Math.sin(base) * def.speed * 7.5 * scale;
       break;
     }
-    case 1: { // slam / nova ring
+    case 1: {
       addTele(w, b.x, b.z, 4.4, 0.4, def.accent, def.damage * 1.5 * scale, 0);
       w.shake = Math.max(w.shake, 1.2);
       break;
     }
-    case 2: { // thorn fan
+    case 2: {
       const shots = 3 + b.phase;
       for (let i = 0; i < shots; i++) {
         const a = base + (i - (shots - 1) / 2) * 0.16;
@@ -837,7 +821,7 @@ function resolveBossTelegraph(w: World, b: Boss): void {
       }
       break;
     }
-    case 3: { // void orb fan
+    case 3: {
       const shots = 5 + b.phase * 2;
       for (let i = 0; i < shots; i++) {
         const a = w.rand() * Math.PI * 2;
@@ -845,7 +829,7 @@ function resolveBossTelegraph(w: World, b: Boss): void {
       }
       break;
     }
-    case 4: { // teleport slam
+    case 4: {
       const tx = clamp(p.x + (w.rand() - 0.5) * 6, -HALF_W + 3, HALF_W - 3);
       const tz = clamp(p.z + (w.rand() - 0.5) * 6, -HALF_W + 3, HALF_W - 3);
       addTele(w, tx, tz, 3.2, 0.5, def.accent, def.damage * 1.4 * scale, 0);
@@ -870,13 +854,11 @@ export function hitBoss(w: World, dmg: number, kx = 0, kz = 0): void {
     w.stats.bosses += 1;
     w.stats.bossesDefeated.push(b.id);
     const def = BOSSES[b.id];
-    // Permanent first-kill bonuses apply immediately (and persist at finish).
     w.permanent.damage = Math.min(0.3, w.permanent.damage + def.permanent.damage);
     w.permanent.maxHp = Math.min(60, w.permanent.maxHp + def.permanent.maxHp);
     w.permanent.moveSpeed = Math.min(0.12, w.permanent.moveSpeed + def.permanent.moveSpeed);
     w.player.maxHp += def.permanent.maxHp;
     w.player.hp = Math.min(w.player.maxHp, w.player.hp + def.permanent.maxHp);
-    // loot burst
     dropPickup(w, 'rare', b.x + 1, b.z);
     dropPickup(w, 'rare', b.x - 1, b.z);
     dropPickup(w, 'hp', b.x, b.z + 1);
@@ -905,7 +887,6 @@ function stepProjectiles(w: World, dt: number): void {
       continue;
     }
     if (pr.kind === 'player') {
-      // hits enemies
       for (const e of w.enemies) {
         if (!e.active) continue;
         const dx = e.x - pr.x;
@@ -917,7 +898,6 @@ function stepProjectiles(w: World, dt: number): void {
           break;
         }
       }
-      // and the boss
       if (pr.active && w.boss && !w.boss.dead) {
         const b = w.boss;
         const dx = b.x - pr.x;
@@ -928,7 +908,6 @@ function stepProjectiles(w: World, dt: number): void {
         }
       }
     } else {
-      // enemy projectile vs player
       const dx = p.x - pr.x;
       const dz = p.z - pr.z;
       if (dx * dx + dz * dz < (0.55 + pr.r) * (0.55 + pr.r)) {
@@ -945,7 +924,6 @@ function stepTelegraphs(w: World, dt: number): void {
     t.ttl -= dt;
     if (t.ttl <= 0) {
       t.active = false;
-      // resolve damage
       const p = w.player;
       if (t.dmg > 0 && Math.hypot(p.x - t.x, p.z - t.z) < t.r + 0.55) {
         damagePlayer(w, t.dmg, t.x, t.z, 7);
@@ -953,7 +931,6 @@ function stepTelegraphs(w: World, dt: number): void {
       if (t.dmgEnemies > 0) burstEnemies(w, t.x, t.z, t.r, t.dmgEnemies, 6);
       continue;
     }
-    // tick to impact phase near the end so it reads as a flash
     if (t.phase === 0 && t.ttl < 0.3) t.phase = 1;
   }
 }
@@ -974,7 +951,6 @@ function stepPickups(w: World, dt: number): void {
     const dz = p.z - pu.z;
     const d = Math.hypot(dx, dz);
     if (d < 2.8) {
-      // magnet
       const pull = 9 * dt;
       pu.x += (dx / (d || 1)) * pull;
       pu.z += (dz / (d || 1)) * pull;
@@ -1035,14 +1011,9 @@ function stepLandmarks(w: World): void {
       }
     }
   }
-
-  // objective: first undiscovered boss; else survive
   const nextBoss = w.landmarks.find((l) => l.kind === 'boss' && !l.discovered);
   w.objective = nextBoss ?? w.landmarks[0];
-  void w.objective;
 }
-
-/* ----------------------------------------------------------------- step -- */
 
 export function step(
   w: World,
@@ -1055,7 +1026,6 @@ export function step(
 
   stepPlayer(w, input, dt);
 
-  // biome transitions
   const b = biomeAt(w.player.x, w.player.z, w.seed);
   if (b !== w.biome) {
     w.biome = b;
@@ -1071,7 +1041,6 @@ export function step(
     stepEvent(w, dt);
     stepLandmarks(w);
 
-    // spawn director
     w.spawnTimer -= dt;
     if (w.spawnTimer <= 0) {
       const biomeMul = BIOMES[w.biome].spawnMul;
@@ -1079,14 +1048,12 @@ export function step(
       spawnPack(w);
     }
 
-    // events
     w.eventTimer -= dt;
     if (w.eventTimer <= 0) {
       w.eventTimer = 42 + w.rand() * 26;
       triggerEvent(w, rollEvent(w));
     }
 
-    // meteors falling: telephase already resolves via stepTelegraphs
     const ev = w.event;
     if (ev.kind === 'meteor' && w.rand() < dt * 2.2) {
       const mx = ev.x + (w.rand() - 0.5) * 14;
@@ -1095,14 +1062,11 @@ export function step(
     }
   }
 
-  // always finish damage queue safety
   if (w.player.hp <= 0 && !w.over) {
     w.over = true;
     w.sfx.push('game.over');
   }
 }
-
-/* --------------------------------------------------------------- finish -- */
 
 export function finishRun(w: World): {
   score: number;

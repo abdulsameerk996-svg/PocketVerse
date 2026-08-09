@@ -138,15 +138,32 @@ function findBiomePoint(
 /**
  * Deterministic decoration field for the renderer. Pure visual — the sim never
  * reads this.
+ *
+ * Guarantees a safe spawn corridor: at least 6 decorations within 12 units of
+ * (0,0) so the player immediately sees terrain, plus the normal seeded scatter.
  */
 export function decorations(seed: number): Decoration[] {
   const rng = createRng(seed ^ 0xdec0);
   const out: Decoration[] = [];
+
+  // ---- Guaranteed visible scenery around spawn (0,0) — deterministic, always present
+  const guaranteed: Decoration[] = [
+    { x: 5.2, z: 3.1, kind: 'rock', scale: 1.1 },
+    { x: -6.0, z: 2.4, kind: 'rock', scale: 1.0 },
+    { x: 3.8, z: -5.5, kind: 'tree', scale: 1.2 },
+    { x: -4.2, z: -6.2, kind: 'tree', scale: 1.0 },
+    { x: 0.8, z: 9.0, kind: 'rock', scale: 0.9 },
+    { x: -1.5, z: -9.5, kind: 'rock', scale: 1.0 },
+  ];
+  out.push(...guaranteed);
+
   let i = 0;
   while (i < 210 && out.length < 210) {
     i += 1;
     const x = (rng() - 0.5) * (HALF_W * 2 - 6);
     const z = (rng() - 0.5) * (HALF_W * 2 - 6);
+    // skip too close to spawn — we already placed guaranteed ones
+    if (Math.hypot(x, z) < 11) continue;
     const b = biomeAt(x, z, seed);
     const kind: Decoration['kind'] =
       b === 'forest' ? 'tree' : b === 'ruins' ? 'pillar' : b === 'danger' ? 'crystal' : 'rock';

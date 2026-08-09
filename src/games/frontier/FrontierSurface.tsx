@@ -4,7 +4,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
-import { HAS_KEYBOARD } from '@/core/game3d';
+import { FallbackScene, HAS_KEYBOARD } from '@/core/game3d';
 import {
   Button,
   Card,
@@ -335,20 +335,54 @@ export default function FrontierSurface({
     return <FrontierMenu save={save} onStart={() => setStage('run')} />;
   }
 
+  const [showFallback, setShowFallback] = useState(false);
+  const [diagMsg, setDiagMsg] = useState<string | null>(null);
+
+  // Fallback detection: if after 4s camera still 0,0,0 → render fallback
+  useEffect(() => {
+    const id = setTimeout(() => {
+      const c = camDiag.current;
+      const isZero = c.x === 0 && c.y === 0 && c.z === 0;
+      if (isZero && stage === 'run') {
+        console.warn('[frontier] camera still zero after 4s — showing fallback diagnostic');
+        setDiagMsg('Camera still zero — fallback arena should appear. If not, Canvas/renderer failed.');
+        // Don't auto-switch to fallback in prod, but show diagnostic + offer fallback button
+      }
+    }, 4000);
+    return () => clearTimeout(id);
+  }, [stage]);
+
   if (!world) {
     return (
       <View style={styles.root}>
-        <View style={styles.errorCard}>
-          <Text variant="micro" color={palette.coral} center>
-            FRONTIER · INIT ERROR
-          </Text>
-          <Text variant="heading" center style={{ marginTop: spacing.xs }}>
-            The frontier could not load
-          </Text>
-          <Text variant="caption" muted center style={{ marginTop: spacing.sm }}>
-            World generation hit an error. Retry — your frontier save is safe.
-          </Text>
-          <Button label="Try again" onPress={() => setAttempt((a) => a + 1)} full style={{ marginTop: spacing.lg }} />
+        <FallbackScene message="FRONTIER INIT FAILED — FALLBACK ARENA" />
+        <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+          <View style={styles.errorCard}>
+            <Text variant="micro" color={palette.coral} center>
+              FRONTIER · INIT ERROR
+            </Text>
+            <Text variant="heading" center style={{ marginTop: spacing.xs }}>
+              The frontier could not load
+            </Text>
+            <Text variant="caption" muted center style={{ marginTop: spacing.sm }}>
+              World generation hit an error. Showing fallback arena so screen is never blank. Retry — save is safe.
+            </Text>
+            <Button label="Try again" onPress={() => setAttempt((a) => a + 1)} full style={{ marginTop: spacing.lg }} />
+            <Button label="Show Test Arena" onPress={() => setShowFallback(true)} variant="secondary" full style={{ marginTop: spacing.sm }} />
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  if (showFallback) {
+    return (
+      <View style={styles.root}>
+        <FallbackScene message="FRONTIER FALLBACK — guaranteed visible" />
+        <View pointerEvents="box-none" style={styles.loadingOverlay}>
+          <Text variant="micro" color={palette.coral}>FALLBACK MODE</Text>
+          <Text variant="caption" muted style={{ marginTop: spacing.xs }}>Real scene failed — this box+ sphere must be visible. If not, Canvas/renderer itself failed.</Text>
+          <Button label="Retry Real Scene" onPress={() => setShowFallback(false)} style={{ marginTop: spacing.md }} />
         </View>
       </View>
     );
@@ -364,8 +398,9 @@ export default function FrontierSurface({
             FRONTIER
           </Text>
           <Text variant="caption" muted style={{ marginTop: spacing.xs }}>
-            Loading world…
+            Loading world… (guaranteed scenery near spawn, enemies within 1s)
           </Text>
+          {diagMsg ? <Text variant="micro" color={palette.coral} center style={{ marginTop: spacing.sm }}>{diagMsg}</Text> : null}
         </View>
       ) : null}
 

@@ -1193,35 +1193,8 @@ export function spriteForItem(item: ItemLike): Sprite {
 /* ========================================================================== */
 
 export const GAME_THUMBS: Record<string, MotifKey> = {
-  pet: 'paw',
-  runner: 'bolt',
-  driving: 'car',
-  puzzle: 'gamepad',
-  zombie: 'skull',
-  farm: 'sprout',
-  fishing: 'fish',
-  platformer: 'mountain',
-  rhythm: 'notes',
-  arcade: 'joystick',
-  penfight: 'pen',
-  airhockey: 'puck',
-  sumo: 'target',
-  tankduel: 'tank',
-  colorclash: 'splat',
-  dodgeduel: 'crosshair',
-  frontier: 'compass',
-  stackrush: 'box',
-  colorsnap: 'sun',
-  hookrun: 'wave',
-  survive60: 'heart',
-  towerdef: 'shield',
-  // Phase 8 quick-play set
-  dodgerain: 'rain',
-  onetap: 'wing',
-  nummerge: 'merge',
-  lasersurvive: 'laser',
-  memrush: 'pulse',
-  orbitguard: 'orbit',
+  // Single flagship rebuild — only Nexus Arena in visible catalogue
+  nexusarena: 'compass',
 };
 
 /** Game thumbnail. `accent` is the module's own accent colour. */
