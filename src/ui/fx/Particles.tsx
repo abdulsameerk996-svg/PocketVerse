@@ -7,8 +7,7 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
-import { createRng } from '@/core/utils/rng';
-import { useSettingsStore } from '@/core/state/settingsStore';
+import { createRng } from '../utils/rng';
 
 type BurstProps = {
   /** Change this value to re-fire the burst. */
@@ -18,8 +17,6 @@ type BurstProps = {
   radius?: number;
   size?: number;
   duration?: number;
-  /** Emoji/glyph particles instead of dots. */
-  glyphs?: string[];
 };
 
 function Particle({
@@ -79,12 +76,7 @@ function Particle({
   );
 }
 
-/**
- * Radial particle burst.
- *
- * Used for coin pickups, level-ups, perfect hits and harvests. Purely
- * declarative: mount it centred on a point and bump `trigger`.
- */
+/** Radial particle burst — mount centred on a point and bump `trigger`. */
 export const Burst = memo(function Burst({
   trigger,
   colors = ['#FFD166', '#FF9F1C', '#FFFFFF'],
@@ -93,7 +85,6 @@ export const Burst = memo(function Burst({
   size = 6,
   duration = 620,
 }: BurstProps) {
-  const reduced = useSettingsStore((s) => s.settings.reducedMotion);
   const seed = typeof trigger === 'number' ? trigger : trigger.length;
 
   const particles = useMemo(() => {
@@ -108,8 +99,6 @@ export const Burst = memo(function Burst({
       spin: (rng() - 0.5) * 540,
     }));
   }, [seed, count, radius, size, duration, colors]);
-
-  if (reduced) return null;
 
   return (
     <View pointerEvents="none" style={styles.center}>

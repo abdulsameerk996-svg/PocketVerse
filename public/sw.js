@@ -1,10 +1,10 @@
 /*
- * PocketVerse service worker.
+ * Donut Tycoon service worker.
  *
- * The app was offline-first long before it had a web build — SQLite is the
- * server, and nothing is designed as if a network might exist. The job here is
- * only to make the *shell* match that promise: once you have loaded the game
- * once, it should start with the plane in flight mode.
+ * The game is offline-first: the save lives on the device and nothing is
+ * designed as if a network might exist. The job here is only to make the
+ * *shell* match that promise — once you have loaded the game once, it starts
+ * with the plane in flight mode.
  *
  * Strategy, deliberately boring:
  *   · navigations  → network first, fall back to the cached shell
@@ -16,8 +16,8 @@
  */
 
 const CACHE_VERSION = 'v1';
-const SHELL_CACHE = `pocketverse-shell-${CACHE_VERSION}`;
-const RUNTIME_CACHE = `pocketverse-runtime-${CACHE_VERSION}`;
+const SHELL_CACHE = `donuttycoon-shell-${CACHE_VERSION}`;
+const RUNTIME_CACHE = `donuttycoon-runtime-${CACHE_VERSION}`;
 const SHELL_URL = '/index.html';
 
 /** Content-hashed or otherwise immutable — safe to serve from cache forever. */

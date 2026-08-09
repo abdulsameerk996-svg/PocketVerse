@@ -1,20 +1,16 @@
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
-import { useCallback } from 'react';
-import { getSettings } from '@/core/state/settingsStore';
 
 /**
  * Central haptics façade.
  *
- * Every call is settings-aware and no-ops on web, so call sites never need to
- * guard. Games should use the semantic verbs (`hit`, `fail`, `collect`) rather
+ * Every call no-ops on web (where expo-haptics is a stub), so call sites never
+ * need to guard. Games use semantic verbs (`hit`, `fail`, `collect`) rather
  * than raw impact styles, so the feel can be retuned globally later.
  */
 
-const enabled = () => Platform.OS !== 'web' && getSettings().haptics;
-
 const safe = (fn: () => Promise<void>) => {
-  if (!enabled()) return;
+  if (Platform.OS === 'web') return;
   fn().catch(() => {
     /* haptics are best-effort */
   });
@@ -41,7 +37,3 @@ export const haptics = {
   /** Collect pickup — light and frequent, deliberately the cheapest. */
   collect: () => safe(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft)),
 };
-
-export function useHaptics() {
-  return useCallback(() => haptics, [])();
-}

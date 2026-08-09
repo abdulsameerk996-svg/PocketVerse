@@ -4,19 +4,6 @@
 # Pages reads this file from the root of the deployed directory.
 
 /*
-  # ── Required, not optional ────────────────────────────────────────────────
-  # expo-sqlite runs real SQLite in a Web Worker and touches SharedArrayBuffer,
-  # which browsers only expose to cross-origin-isolated documents. Without these
-  # two headers the database fails to open and the game boots to an error
-  # screen. The dev server sets the same pair from `metro.config.js`.
-  #
-  # The cost: every cross-origin subresource now needs CORP/CORS. PocketVerse
-  # loads none — no CDN, no fonts, no analytics — so nothing else has to change.
-  # If you ever add a third-party embed, it will break here first.
-  Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: require-corp
-
-  # ── Ordinary hardening ────────────────────────────────────────────────────
   X-Content-Type-Options: nosniff
   Referrer-Policy: same-origin
   X-Frame-Options: SAMEORIGIN
@@ -27,13 +14,6 @@
   Cache-Control: public, max-age=31536000, immutable
 
 /assets/*
-  Cache-Control: public, max-age=31536000, immutable
-
-# The SQLite WASM module must never be served as HTML. Cloudflare's default
-# MIME map already maps .wasm to application/wasm, but pin it explicitly so a
-# wrong Content-Type can never break WebAssembly.instantiateStreaming.
-/assets/*.wasm
-  Content-Type: application/wasm
   Cache-Control: public, max-age=31536000, immutable
 
 # The shell and the worker must never be served stale, or a deploy cannot

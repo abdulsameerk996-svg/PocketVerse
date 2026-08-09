@@ -1,15 +1,15 @@
 {
-  "name": "PocketVerse",
-  "short_name": "PocketVerse",
-  "description": "Twenty-eight games, one avatar, one inventory, one save file. Offline-first, no account, no network.",
+  "name": "Donut Tycoon",
+  "short_name": "Donut Tycoon",
+  "description": "Tap donuts, hire a café crew and grow an empire — an idle tycoon that keeps earning even while you're away. Offline-first, no account, no network.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "fullscreen"],
   "orientation": "portrait",
-  "background_color": "#08080F",
-  "theme_color": "#08080F",
+  "background_color": "#160F0B",
+  "theme_color": "#160F0B",
   "categories": ["games", "entertainment"],
   "lang": "en",
   "dir": "ltr",
@@ -32,20 +32,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
-    }
-  ],
-  "shortcuts": [
-    {
-      "name": "Play",
-      "short_name": "Play",
-      "url": "/play",
-      "description": "Jump straight to the arcade grid"
-    },
-    {
-      "name": "Quests",
-      "short_name": "Quests",
-      "url": "/quests",
-      "description": "Today's quests and rewards"
     }
   ]
 }

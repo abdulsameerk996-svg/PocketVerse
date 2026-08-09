@@ -2,12 +2,45 @@ import React, { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInUp, FadeOutUp, Layout } from 'react-native-reanimated';
-import { useUiStore, type Toast } from '@/core/state/uiStore';
+import { create } from 'zustand';
 import { palette, radius, shadow, spacing } from '../theme/tokens';
-import { Text } from './Text';
-import { PressableScale } from './PressableScale';
+import { Text } from '../components/Text';
+import { PressableScale } from '../components/PressableScale';
 
-const TONE: Record<Toast['tone'], string> = {
+export type ToastTone = 'default' | 'success' | 'warn' | 'reward';
+
+export type Toast = {
+  id: number;
+  title: string;
+  subtitle?: string;
+  tone: ToastTone;
+};
+
+type UiState = {
+  toasts: Toast[];
+  pushToast: (t: Omit<Toast, 'id'>) => void;
+  dismissToast: (id: number) => void;
+};
+
+let nextToastId = 1;
+
+/**
+ * Tiny global toast bus — the whole app (game loops, reward claims, errors)
+ * reports through here and `Toaster` renders the queue. Zustand keeps it
+ * dependency-free and re-render-isolated.
+ */
+export const useUiStore = create<UiState>((set) => ({
+  toasts: [],
+  pushToast: (t) =>
+    set((s) => {
+      const id = nextToastId++;
+      const toasts = [...s.toasts, { ...t, id }].slice(-4);
+      return { toasts };
+    }),
+  dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+}));
+
+const TONE: Record<ToastTone, string> = {
   default: palette.violet,
   success: palette.mint,
   warn: palette.amber,
@@ -34,11 +67,10 @@ export const Toaster = memo(function Toaster() {
           <PressableScale
             onPress={() => dismiss(t.id)}
             haptic={false}
-            sound={false}
             style={[styles.toast, { borderColor: `${TONE[t.tone]}66` }, shadow.hard]}
           >
             <View style={[styles.glyphBox, { backgroundColor: `${TONE[t.tone]}22` }]}>
-              <Text size={18}>{t.glyph ?? '✨'}</Text>
+              <Text size={18}>🍩</Text>
             </View>
             <View style={styles.body}>
               <Text variant="label" numberOfLines={1}>
@@ -71,7 +103,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.md,
     borderRadius: radius.lg,
-    backgroundColor: 'rgba(20,20,34,0.96)',
+    backgroundColor: 'rgba(30,20,13,0.96)',
     borderWidth: 1,
   },
   glyphBox: {

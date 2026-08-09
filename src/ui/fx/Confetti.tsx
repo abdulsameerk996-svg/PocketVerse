@@ -7,10 +7,9 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
-import { createRng } from '@/core/utils/rng';
-import { useSettingsStore } from '@/core/state/settingsStore';
+import { createRng } from '../utils/rng';
 
-const COLORS = ['#FFD166', '#7C5CFF', '#22D3EE', '#34E2A8', '#FF4D8D', '#FFFFFF'];
+const COLORS = ['#FFD166', '#E8934A', '#6FD3C0', '#7FD8A0', '#FF8FB3', '#FFFFFF'];
 
 function Ribbon({
   x,
@@ -63,16 +62,9 @@ function Ribbon({
   );
 }
 
-/** Full-screen celebration confetti — level-ups, achievements, day-7 rewards. */
-export const Confetti = memo(function Confetti({
-  trigger,
-  count = 42,
-}: {
-  trigger: number;
-  count?: number;
-}) {
+/** Full-screen celebration confetti — level-ups, milestone claims, prestige. */
+export const Confetti = memo(function Confetti({ trigger, count = 42 }: { trigger: number; count?: number }) {
   const { width, height } = useWindowDimensions();
-  const reduced = useSettingsStore((s) => s.settings.reducedMotion);
 
   const ribbons = useMemo(() => {
     const rng = createRng(trigger * 7919 + 13);
@@ -87,8 +79,6 @@ export const Confetti = memo(function Confetti({
       spin: (rng() - 0.5) * 1200,
     }));
   }, [trigger, count, width]);
-
-  if (reduced) return null;
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>

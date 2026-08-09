@@ -1,27 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
-import { Stack, usePathname } from 'expo-router';
+import { Stack } from 'expo-router';
 
-import { getGame } from '@/core/registry';
-import { flush } from '@/core/save/saveService';
-import { bootstrap } from '@/core/services/boot';
-import { useSettingsStore } from '@/core/state/settingsStore';
-import { installGames } from '@/games';
-import { installSound } from '@/ui/hooks/soundBackend';
-import { playMusic, stopMusic } from '@/ui/hooks/useSound';
-import { CelebrationOverlay, MAX_FRAME_WIDTH, Toaster, palette } from '@/ui';
-import { BootScreen } from '@/ui/components/BootScreen';
-
-// Games must be registered before anything reads the registry (catalog, saves).
-installGames();
-// Registers the sound sink. Both platforms synthesise every cue at runtime
-// (web: WebAudio, native: expo-audio WAV synthesis) — see docs/ASSETS.md.
-installSound();
+import { MAX_FRAME_WIDTH, palette } from '@/ui';
+import { Toaster } from '@/ui/components/Toaster';
+import { CelebrationOverlay } from '@/ui/components/CelebrationOverlay';
 
 /*
  * Native-only, and guarded for two reasons: neither API means anything in a
@@ -34,95 +22,24 @@ if (Platform.OS !== 'web') {
   void SystemUI.setBackgroundColorAsync(palette.void);
 }
 
-/**
- * Root layout.
- *
- * Responsibilities, in order:
- *   1. register game modules (module scope, above — must precede hydration)
- *   2. run the boot sequence (DB → migrations → hydrate → offline sim)
- *   3. mount the global overlays every screen relies on
- *
- * No screen renders until boot resolves, so no screen ever has to handle a
- * half-hydrated store.
- */
-/**
- * Decides what music should be playing and keeps it in sync with the route and
- * the Music setting. The backends make replaying the same track a no-op, so
- * hub→hub or hub→modal navigation never restarts the loop.
- */
-function MusicDirector() {
-  const pathname = usePathname();
-  const musicOn = useSettingsStore((s) => s.settings.music);
-
-  useEffect(() => {
-    if (!musicOn) {
-      stopMusic();
-      return;
-    }
-    const match = pathname.match(/^\/game\/([^/]+)/);
-    const module = match ? getGame(match[1]) : undefined;
-    playMusic(module ? (module.meta.kind === 'ambient' ? 'chill' : 'action') : 'hub');
-  }, [pathname, musicOn]);
-
-  return null;
-}
-
 export default function RootLayout() {
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
-    let cancelled = false;
-    bootstrap()
-      .then(() => {
-        if (cancelled) return;
-        setReady(true);
-        if (Platform.OS !== 'web') void SplashScreen.hideAsync();
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : 'Failed to start');
-        if (Platform.OS !== 'web') void SplashScreen.hideAsync();
-      });
-    return () => {
-      cancelled = true;
-      void flush();
-    };
+    // The game is ready the moment it mounts — drop the splash immediately.
+    if (Platform.OS !== 'web') void SplashScreen.hideAsync();
   }, []);
 
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <StatusBar style="light" />
-        {/*
-          On web the app is a centred column no wider than a large phone.
-          Without it, a desktop browser stretches a portrait game across 1900px
-          and `useResponsive` scales every glyph and control to match. The
-          overlays live inside the frame too, so a toast lines up with the UI
-          it belongs to rather than with the browser window.
-
-          On native `frame` is just `flex: 1` — the clamp never binds.
-        */}
         <View style={styles.frame}>
-          {ready ? (
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: palette.void },
-                animation: 'fade',
-              }}
-            >
-              <Stack.Screen name="(hub)" />
-              <Stack.Screen name="game/[id]" options={{ animation: 'slide_from_bottom' }} />
-              <Stack.Screen
-                name="modal"
-                options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-              />
-            </Stack>
-          ) : (
-            <BootScreen error={error} />
-          )}
-          <MusicDirector />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: palette.void },
+              animation: 'fade',
+            }}
+          />
           <Toaster />
           <CelebrationOverlay />
         </View>

@@ -1,44 +1,44 @@
 /**
- * PocketVerse design tokens.
+ * Donut Tycoon design tokens.
  *
- * Single source of truth for every visual constant in the app. Games and hub
- * screens must never hard-code a hex value — they pull from here (or from a
- * module's `accent` pair) so that a future theme swap is one file.
+ * Single source of truth for every visual constant in the app. The palette is a
+ * warm café theme — dark espresso surfaces, cream text, caramel + glaze accents.
+ * Key names are stable so components never hard-code a hex value.
  */
 
 export const palette = {
-  // Base surfaces — near-black with a violet bias so neon accents read warm.
-  void: '#08080F',
-  abyss: '#0C0C17',
-  surface: '#12121F',
-  surfaceAlt: '#181829',
-  elevated: '#1E1E33',
-  hairline: 'rgba(255,255,255,0.07)',
-  hairlineStrong: 'rgba(255,255,255,0.14)',
+  // Base surfaces — espresso blacks with a warm bias so caramel accents glow.
+  void: '#160F0B',
+  abyss: '#1E140D',
+  surface: '#281A10',
+  surfaceAlt: '#332114',
+  elevated: '#3E2A1A',
+  hairline: 'rgba(255,236,214,0.08)',
+  hairlineStrong: 'rgba(255,236,214,0.16)',
 
   // Text
-  text: '#F4F4FF',
-  textMuted: '#A0A0BF',
-  textFaint: '#63637F',
+  text: '#FFF6EC',
+  textMuted: '#D9BFA6',
+  textFaint: '#96795C',
 
   // Brand + semantic accents
-  violet: '#7C5CFF',
-  violetDim: '#5B3FE0',
-  cyan: '#22D3EE',
-  mint: '#34E2A8',
-  lime: '#A3E635',
-  amber: '#FFB443',
-  gold: '#FFD166',
-  coral: '#FF6B6B',
-  rose: '#FF4D8D',
-  magenta: '#C05CFF',
-  sky: '#4EA8FF',
+  violet: '#E8934A',
+  violetDim: '#C26F2B',
+  cyan: '#6FD3C0',
+  mint: '#7FD8A0',
+  lime: '#B8D47E',
+  amber: '#FFB85C',
+  gold: '#FFD98A',
+  coral: '#FF8A6B',
+  rose: '#FF8FB3',
+  magenta: '#D98BD8',
+  sky: '#8AB8E8',
 
-  // Currency + resource colours (used identically in every game)
-  coin: '#FFC53D',
-  gem: '#57E0FF',
-  xp: '#A78BFA',
-  energy: '#4ADE80',
+  // Currency + resource colours
+  coin: '#FFC94D',
+  gem: '#6FD3C0',
+  xp: '#C7A0F0',
+  energy: '#7FDB8A',
 
   white: '#FFFFFF',
   black: '#000000',
@@ -47,18 +47,18 @@ export const palette = {
 export type Gradient = readonly [string, string, ...string[]];
 
 export const gradients = {
-  hub: ['#12061F', '#08080F', '#050510'] as Gradient,
-  violet: ['#8B5CFF', '#5B3FE0'] as Gradient,
-  cyan: ['#22D3EE', '#3B82F6'] as Gradient,
-  mint: ['#34E2A8', '#0EA5A0'] as Gradient,
-  sunset: ['#FF8A3D', '#FF4D8D'] as Gradient,
-  gold: ['#FFD166', '#FF9F1C'] as Gradient,
-  toxic: ['#A3E635', '#22C55E'] as Gradient,
-  blood: ['#FF4D4D', '#8B1E3F'] as Gradient,
-  deep: ['#4EA8FF', '#1D3FA8'] as Gradient,
-  candy: ['#C05CFF', '#FF6BD6'] as Gradient,
-  slate: ['#2A2A44', '#171728'] as Gradient,
-  glass: ['rgba(255,255,255,0.10)', 'rgba(255,255,255,0.02)'] as Gradient,
+  hub: ['#2A160D', '#160F0B', '#0F0906'] as Gradient,
+  violet: ['#F0A45C', '#C26F2B'] as Gradient,
+  cyan: ['#6FD3C0', '#3B8F82'] as Gradient,
+  mint: ['#7FD8A0', '#3FA373'] as Gradient,
+  sunset: ['#FFB85C', '#F2789F'] as Gradient,
+  gold: ['#FFD98A', '#E8934A'] as Gradient,
+  toxic: ['#B8D47E', '#7FBF5A'] as Gradient,
+  blood: ['#FF7A6B', '#A13A2A'] as Gradient,
+  deep: ['#8AB8E8', '#3B5F8F'] as Gradient,
+  candy: ['#E08BD0', '#F2789F'] as Gradient,
+  slate: ['#4A3A2C', '#2A1E14'] as Gradient,
+  glass: ['rgba(255,236,214,0.10)', 'rgba(255,236,214,0.02)'] as Gradient,
 } as const;
 
 export type GradientName = keyof typeof gradients;

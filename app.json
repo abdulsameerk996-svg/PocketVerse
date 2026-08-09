@@ -1,16 +1,16 @@
 {
   "expo": {
-    "name": "PocketVerse",
+    "name": "Donut Tycoon",
     "slug": "v2has",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "pocketverse",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
-    "backgroundColor": "#08080F",
+    "backgroundColor": "#160F0B",
     "splash": {
       "image": "./assets/splash.png",
-      "backgroundColor": "#08080F",
+      "backgroundColor": "#160F0B",
       "resizeMode": "contain"
     },
     "assetBundlePatterns": [
@@ -20,49 +20,36 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.pocketverse.app",
       "infoPlist": {
-        "UIViewControllerBasedStatusBarAppearance": false,
-        "NSPhotoLibraryUsageDescription": "PocketVerse lets you use your own photos as your avatar. Images never leave your device."
+        "UIViewControllerBasedStatusBarAppearance": false
       }
     },
     "android": {
       "package": "com.pocketverse.app",
       "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
-        "backgroundColor": "#08080F"
-      },
-      "permissions": [
-        "android.permission.RECORD_AUDIO"
-      ]
+        "backgroundColor": "#160F0B"
+      }
     },
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./public/icons/favicon-32.png",
-      "name": "PocketVerse",
-      "shortName": "PocketVerse",
-      "themeColor": "#08080F",
-      "backgroundColor": "#08080F",
-      "description": "Twenty-eight games, one avatar, one inventory, one save file. Offline-first, no account, no network."
+      "name": "Donut Tycoon",
+      "shortName": "Donut Tycoon",
+      "themeColor": "#160F0B",
+      "backgroundColor": "#160F0B",
+      "description": "Tap donuts, hire a café crew and grow an empire — an idle tycoon that keeps earning even while you're away. Offline-first, no account, no network."
     },
     "plugins": [
       "expo-router",
-      "expo-sqlite",
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "PocketVerse lets you use your own photos as your avatar. Images never leave your device."
-        }
-      ],
       [
         "expo-splash-screen",
         {
           "image": "./assets/splash.png",
-          "backgroundColor": "#08080F",
+          "backgroundColor": "#160F0B",
           "resizeMode": "contain"
         }
-      ],
-      "expo-asset",
-      "expo-audio"
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

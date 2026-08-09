@@ -7,9 +7,8 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import { clamp } from '../utils/format';
 import { gradients, motion, palette, radius, type Gradient } from '../theme/tokens';
-import { clamp } from '@/core/utils/format';
-import { useSettingsStore } from '@/core/state/settingsStore';
 
 export type ProgressBarProps = {
   /** 0..1 */
@@ -18,7 +17,7 @@ export type ProgressBarProps = {
   gradient?: Gradient;
   track?: string;
   style?: StyleProp<ViewStyle>;
-  /** Renders a soft leading-edge glow — good for XP / boss health. */
+  /** Renders a soft leading-edge glow. */
   glow?: boolean;
   rounded?: boolean;
   /** Segmented look (energy pips). */
@@ -37,11 +36,10 @@ export const ProgressBar = memo(function ProgressBar({
 }: ProgressBarProps) {
   const pct = clamp(value, 0, 1);
   const progress = useSharedValue(pct);
-  const reduced = useSettingsStore((s) => s.settings.reducedMotion);
 
   useEffect(() => {
-    progress.value = reduced ? pct : withSpring(pct, motion.springSoft);
-  }, [pct, progress, reduced]);
+    progress.value = withSpring(pct, motion.springSoft);
+  }, [pct, progress]);
 
   const fill = useAnimatedStyle(() => ({
     width: `${Math.max(0, Math.min(1, progress.value)) * 100}%`,

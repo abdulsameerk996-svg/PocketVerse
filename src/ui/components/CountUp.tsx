@@ -1,40 +1,39 @@
 import React, { memo, useEffect, useRef, useState } from 'react';
 import { Text, type TextProps } from './Text';
-import { compactNumber, withCommas } from '@/core/utils/format';
-import { useSettingsStore } from '@/core/state/settingsStore';
+import { compactNumber, withCommas } from '../utils/format';
 
 export type CountUpProps = Omit<TextProps, 'children'> & {
   value: number;
   duration?: number;
   format?: 'compact' | 'comma' | 'plain';
+  /** Custom display formatter (e.g. money with $ + suffix). */
+  formatter?: (n: number) => string;
   prefix?: string;
   suffix?: string;
 };
 
 /**
- * Animated numeric readout.
- *
- * Counting coins up rather than snapping is a small thing that makes rewards
- * feel earned. Uses a JS interval intentionally: it drives text content, which
- * cannot live on the UI thread anyway, and runs only while a value changes.
+ * Animated numeric readout — counting money up rather than snapping makes
+ * rewards feel earned. Uses a JS interval deliberately: it drives text
+ * content, which cannot live on the UI thread anyway.
  */
 export const CountUp = memo(function CountUp({
   value,
   duration = 650,
   format = 'comma',
+  formatter,
   prefix = '',
   suffix = '',
   ...textProps
 }: CountUpProps) {
   const [display, setDisplay] = useState(value);
   const fromRef = useRef(value);
-  const reduced = useSettingsStore((s) => s.settings.reducedMotion);
 
   useEffect(() => {
     const from = fromRef.current;
     const to = value;
     if (from === to) return;
-    if (reduced || Math.abs(to - from) < 2) {
+    if (Math.abs(to - from) < 2) {
       fromRef.current = to;
       setDisplay(to);
       return;
@@ -55,10 +54,11 @@ export const CountUp = memo(function CountUp({
     }, 32);
 
     return () => clearInterval(id);
-  }, [value, duration, reduced]);
+  }, [value, duration]);
 
-  const text =
-    format === 'compact'
+  const text = formatter
+    ? formatter(display)
+    : format === 'compact'
       ? compactNumber(display)
       : format === 'plain'
         ? `${Math.round(display)}`

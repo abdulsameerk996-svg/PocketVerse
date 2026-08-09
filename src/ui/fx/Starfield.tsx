@@ -7,9 +7,8 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import { createRng } from '@/core/utils/rng';
+import { createRng } from '../utils/rng';
 import { palette } from '../theme/tokens';
-import { useSettingsStore } from '@/core/state/settingsStore';
 
 type Star = { x: number; y: number; size: number; delay: number; dur: number; opacity: number };
 
@@ -19,11 +18,7 @@ function Dot({ star, width, height }: { star: Star; width: number; height: numbe
   const t = useSharedValue(0);
 
   React.useEffect(() => {
-    t.value = withRepeat(
-      withTiming(1, { duration: star.dur, easing: Easing.inOut(Easing.quad) }),
-      -1,
-      true,
-    );
+    t.value = withRepeat(withTiming(1, { duration: star.dur, easing: Easing.inOut(Easing.quad) }), -1, true);
   }, [star.dur, t]);
 
   const style = useAnimatedStyle(() => ({
@@ -50,16 +45,9 @@ function Dot({ star, width, height }: { star: Star; width: number; height: numbe
   );
 }
 
-/**
- * Ambient background life.
- *
- * 26 shared-value-driven dots — all animation lives on the UI thread, so this
- * costs effectively nothing per frame and never competes with a running game.
- * Disabled entirely under Reduced Motion.
- */
+/** Ambient background life — 26 shared-value dots, all on the UI thread. */
 export const Starfield = memo(function Starfield({ seed = 7 }: { seed?: number }) {
   const { width, height } = useWindowDimensions();
-  const reduced = useSettingsStore((s) => s.settings.reducedMotion);
 
   const stars = useMemo<Star[]>(() => {
     const rng = createRng(seed);
@@ -72,8 +60,6 @@ export const Starfield = memo(function Starfield({ seed = 7 }: { seed?: number }
       opacity: 0.12 + rng() * 0.4,
     }));
   }, [seed]);
-
-  if (reduced) return null;
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
