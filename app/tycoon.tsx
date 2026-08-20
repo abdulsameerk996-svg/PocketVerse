@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, View, ScrollView } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,7 +10,7 @@ import { derive, prestigeGain, prestigeMultiplier } from '@/tycoon/engine';
 import { formatMoney } from '@/tycoon/format';
 import { playCue, syncSoundMute } from '@/tycoon/sound';
 import { DonutIcon } from '@/tycoon/art/DonutIcon';
-import { CafeWorld } from '@/tycoon/art/CafeWorld';
+import { CafeScene3D } from '@/tycoon/art/CafeScene3D';
 import { ShopPanel, UpgradesPanel, StatsPanel } from '@/tycoon/ui/panels';
 import { OfflineSheet, PrestigeSheet, SettingsSheet } from '@/tycoon/ui/sheets';
 import { CountUp } from '@/ui/components/CountUp';
@@ -29,7 +29,6 @@ export default function DonutTycoon() {
 
   const insets = useSafeAreaInsets();
   const state = useTycoon((s) => s.state);
-  const world = useTycoon((s) => s.world);
   const settings = useTycoon((s) => s.settings);
   const offlineGain = useTycoon((s) => s.offlineGain);
   const offlineSeconds = useTycoon((s) => s.offlineSeconds);
@@ -42,7 +41,7 @@ export default function DonutTycoon() {
 
   const d = useMemo(() => derive(state), [state]);
 
-  const onTapBuilding = useCallback(() => {
+  const onTap = useCallback(() => {
     useTycoon.getState().tap();
     playCue('tap');
   }, []);
@@ -87,15 +86,16 @@ export default function DonutTycoon() {
         </View>
       </View>
 
-      {/* Café World — the hero visual */}
-      <ScrollView style={styles.worldScroll} contentContainerStyle={styles.worldContent}>
-        <CafeWorld
-          state={state}
-          characters={world.characters}
-          floaters={world.floaters}
-          onTapBuilding={onTapBuilding}
-        />
-      </ScrollView>
+      {/* 3D Café Building — the hero visual */}
+      <View style={styles.scene3d}>
+        <CafeScene3D state={state} />
+        {/* Tap overlay — transparent, sits on top of the 3D canvas */}
+        <PressableScale onPress={onTap} scaleTo={0.97} haptic="collect" style={styles.tapOverlay}>
+          <Text variant="micro" color={palette.gold} style={styles.tapLabel}>
+            TAP TO EARN
+          </Text>
+        </PressableScale>
+      </View>
 
       {/* tabs + panel */}
       <View style={[styles.bottom, { paddingBottom: insets.bottom + spacing.sm }]}>
@@ -231,9 +231,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,217,138,0.3)',
   },
-  worldScroll: { flex: 1 },
-  worldContent: { paddingBottom: spacing.sm },
-  bottom: { maxHeight: '45%', paddingHorizontal: spacing.md },
+  scene3d: {
+    flex: 1,
+    minHeight: 200,
+    position: 'relative',
+  },
+  tapOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,217,138,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,217,138,0.3)',
+  },
+  tapLabel: { letterSpacing: 1 },
+  bottom: { maxHeight: '42%', paddingHorizontal: spacing.md },
   tabs: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
   tab: {
     flex: 1,
