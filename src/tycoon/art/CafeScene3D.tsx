@@ -1,472 +1,375 @@
-import React, { Suspense, useMemo, useRef, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Text, RoundedBox } from '@react-three/drei';
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet, Platform } from 'react-native';
 import * as THREE from 'three';
 import type { GameState, GeneratorId } from '../types';
-import { GENERATORS, BUILDING } from '../data';
+import { GENERATORS } from '../data';
 
 /**
- * 3D Café Tycoon — the real3D building view.
+ * 3D Café Tycoon — vanilla Three.js on a canvas element.
  *
- * Renders a multi-story café building where:
- * - Each floor has walls, equipment blocks, and walking characters
- * - The building grows taller as you buy floors
- * - Equipment appears as colored 3D blocks
- * - Barista capsule-characters walk between stations
- * - Ground plane with a street
- * - Camera orbits the building
+ * No R3F, no drei, no import.meta. Just raw Three.js rendering onto
+ * an HTML canvas via a React ref. Works reliably with Expo web builds.
+ *
+ * The building is an isometric-style 3D structure:
+ * - Floors stack vertically with colored slabs
+ * - Equipment blocks sit on each floor
+ * - Capsule barista characters walk between stations
+ * - Camera orbits slowly, user can drag to rotate
  */
 
-const FLOOR_HEIGHT = 1.6;
-const FLOOR_DEPTH = 3;
-const SLOT_WIDTH = 1.2;
-const WALL_THICKNESS = 0.15;
-const WALL_HEIGHT = FLOOR_HEIGHT * 0.85;
+const FLOOR_HEIGHT = 1.8;
+const SLOT_WIDTH = 1.4;
+const FLOOR_DEPTH = 3.2;
 
-/* ---- Equipment color map ---- */
-const EQUIP_COLORS: Record<GeneratorId, string> = {
-  barista: '#6FD3C0',
-  fryer: '#FF8FB3',
-  display: '#FFD166',
-  drive: '#7FD8A0',
-  roaster: '#C9823F',
-  van: '#8AB8E8',
-  franchise: '#E8934A',
-  robo: '#D98BD8',
+const EQUIP_COLORS: Record<string, number> = {
+  barista: 0x6fd3c0,
+  fryer: 0xff8fb3,
+  display: 0xffd166,
+  drive: 0x7fd8a0,
+  roaster: 0xc9823f,
+  van: 0x8ab8e8,
+  franchise: 0xe8934a,
+  robo: 0xd98bd8,
 };
 
-const EQUIP_LABELS: Record<GeneratorId, string> = {
-  barista: '☕',
-  fryer: '🍩',
-  display: '🧁',
-  drive: '🚗',
-  roaster: '🫘',
-  van: '🚐',
-  franchise: '🏪',
-  robo: '🤖',
-};
-
-/* ---- Single equipment block ---- */
-function EquipmentBlock({
-  generatorId,
-  position,
-}: {
-  generatorId: GeneratorId;
-  position: [number, number, number];
-}) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const [hovered, setHovered] = useState(false);
-
-  useFrame((_, delta) => {
-    if (meshRef.current) {
-      meshRef.current.rotation.y += delta * 0.3;
-    }
+function buildScene(state: GameState, scene: THREE.Scene) {
+  // Clear existing meshes (except lights)
+  const toRemove: THREE.Object3D[] = [];
+  scene.traverse((child) => {
+    if (child instanceof THREE.Mesh) toRemove.push(child);
   });
+  toRemove.forEach((o) => scene.remove(o));
 
-  const color = EQUIP_COLORS[generatorId] || '#ffffff';
-  return (
-    <group position={position}>
-      <RoundedBox
-        ref={meshRef}
-        args={[0.5, 0.5, 0.5]}
-        radius={0.08}
-        smoothness={4}
-        onPointerOver={() => setHovered(true)}
-        onPointerOut={() => setHovered(false)}
-      >
-        <meshStandardMaterial
-          color={hovered ? '#ffffff' : color}
-          emissive={color}
-          emissiveIntensity={hovered ? 0.5 : 0.2}
-          metalness={0.3}
-          roughness={0.4}
-        />
-      </RoundedBox>
-      {/* Label above equipment */}
-      <Text
-        position={[0, 0.45, 0]}
-        fontSize={0.3}
-        anchorX="center"
-        anchorY="bottom"
-      >
-        {EQUIP_LABELS[generatorId]}
-      </Text>
-    </group>
-  );
-}
-
-/* ---- Walking barista character ---- */
-function BaristaCharacter({
-  position,
-  floorWidth,
-  slotIndex,
-  hue,
-}: {
-  position: [number, number, number];
-  floorWidth: number;
-  slotIndex: number;
-  hue: number;
-}) {
-  const groupRef = useRef<THREE.Group>(null);
-  const timeRef = useRef(Math.random() * Math.PI * 2);
-
-  useFrame((_, delta) => {
-    if (!groupRef.current) return;
-    timeRef.current += delta * 1.5;
-
-    // Walk back and forth on the floor
-    const halfW = (floorWidth * SLOT_WIDTH) / 2;
-    const targetX = Math.sin(timeRef.current) * (halfW - 0.5);
-    const current = groupRef.current.position.x;
-    groupRef.current.position.x = THREE.MathUtils.lerp(current, targetX, delta * 3);
-
-    // Subtle bob while walking
-    groupRef.current.position.y = position[1] + Math.abs(Math.sin(timeRef.current * 3)) * 0.05;
-  });
-
-  const bodyColor = new THREE.Color().setHSL(hue / 360, 0.6, 0.55);
-  const headColor = new THREE.Color().setHSL(hue / 360, 0.4, 0.8);
-
-  return (
-    <group ref={groupRef} position={position}>
-      {/* Body (capsule shape via cylinder + spheres) */}
-      <mesh position={[0, 0.25, 0]}>
-        <capsuleGeometry args={[0.12, 0.25, 4, 8]} />
-        <meshStandardMaterial color={bodyColor} metalness={0.1} roughness={0.6} />
-      </mesh>
-      {/* Head */}
-      <mesh position={[0, 0.65, 0]}>
-        <sphereGeometry args={[0.14, 8, 8]} />
-        <meshStandardMaterial color={headColor} metalness={0.1} roughness={0.5} />
-      </mesh>
-    </group>
-  );
-}
-
-/* ---- Single floor of the building ---- */
-function BuildingFloor({
-  floorIndex,
-  width,
-  equipment,
-  baristaCount,
-  totalFloors,
-}: {
-  floorIndex: number;
-  width: number;
-  equipment: { id: GeneratorId; slot: number }[];
-  baristaCount: number;
-  totalFloors: number;
-}) {
-  const y = floorIndex * FLOOR_HEIGHT;
-  const buildingWidth = width * SLOT_WIDTH;
-
-  // Equipment positions
-  const equipPositions = equipment.map((e) => ({
-    id: e.id,
-    pos: [
-      (e.slot - (width - 1) / 2) * SLOT_WIDTH,
-      y + 0.4,
-      0,
-    ] as [number, number, number],
-  }));
-
-  // Barista characters
-  const baristas = Array.from({ length: baristaCount }, (_, i) => ({
-    hue: (i * 47) % 360,
-    slot: i % width,
-    pos: [
-      ((i % width) - (width - 1) / 2) * SLOT_WIDTH,
-      y + 0.3,
-      0.3,
-    ] as [number, number, number],
-  }));
-
-  const floorColor = floorIndex % 2 === 0 ? '#3E2A1A' : '#4A3428';
-
-  return (
-    <group>
-      {/* Floor slab */}
-      <RoundedBox
-        position={[0, y, 0]}
-        args={[buildingWidth + 0.6, 0.15, FLOOR_DEPTH + 0.4]}
-        radius={0.05}
-        smoothness={2}
-      >
-        <meshStandardMaterial color={floorColor} metalness={0.2} roughness={0.8} />
-      </RoundedBox>
-
-      {/* Back wall */}
-      <RoundedBox
-        position={[0, y + FLOOR_HEIGHT / 2, -(FLOOR_DEPTH / 2 + 0.1)]}
-        args={[buildingWidth + 0.4, WALL_HEIGHT, WALL_THICKNESS]}
-        radius={0.02}
-        smoothness={1}
-      >
-        <meshStandardMaterial
-          color="#5C3D2E"
-          metalness={0.1}
-          roughness={0.7}
-          transparent
-          opacity={0.85}
-        />
-      </RoundedBox>
-
-      {/* Left wall */}
-      <RoundedBox
-        position={[-(buildingWidth / 2 + 0.2), y + FLOOR_HEIGHT / 2, 0]}
-        args={[WALL_THICKNESS, WALL_HEIGHT, FLOOR_DEPTH + 0.2]}
-        radius={0.02}
-        smoothness={1}
-      >
-        <meshStandardMaterial
-          color="#5C3D2E"
-          metalness={0.1}
-          roughness={0.7}
-          transparent
-          opacity={0.7}
-        />
-      </RoundedBox>
-
-      {/* Right wall */}
-      <RoundedBox
-        position={[(buildingWidth / 2 + 0.2), y + FLOOR_HEIGHT / 2, 0]}
-        args={[WALL_THICKNESS, WALL_HEIGHT, FLOOR_DEPTH + 0.2]}
-        radius={0.02}
-        smoothness={1}
-      >
-        <meshStandardMaterial
-          color="#5C3D2E"
-          metalness={0.1}
-          roughness={0.7}
-          transparent
-          opacity={0.7}
-        />
-      </RoundedBox>
-
-      {/* Floor label */}
-      <Text
-        position={[-(buildingWidth / 2 + 0.5), y + 0.3, -(FLOOR_DEPTH / 2 + 0.15)]}
-        fontSize={0.2}
-        color="#96795C"
-        anchorX="center"
-        anchorY="middle"
-      >
-        F{floorIndex + 1}
-      </Text>
-
-      {/* Equipment blocks */}
-      {equipPositions.map((e) => (
-        <EquipmentBlock key={`${floorIndex}-${e.id}-${e.pos[0]}`} generatorId={e.id} position={e.pos} />
-      ))}
-
-      {/* Barista characters */}
-      {baristas.map((b, i) => (
-        <BaristaCharacter
-          key={`b-${floorIndex}-${i}`}
-          position={b.pos}
-          floorWidth={width}
-          slotIndex={b.slot}
-          hue={b.hue}
-        />
-      ))}
-    </group>
-  );
-}
-
-/* ---- Building roof ---- */
-function BuildingRoof({ width, floorCount }: { width: number; floorCount: number }) {
-  const buildingWidth = width * SLOT_WIDTH;
-  const y = floorCount * FLOOR_HEIGHT;
-
-  return (
-    <group>
-      {/* Roof slab */}
-      <RoundedBox
-        position={[0, y + 0.08, 0]}
-        args={[buildingWidth + 0.8, 0.2, FLOOR_DEPTH + 0.6]}
-        radius={0.1}
-        smoothness={2}
-      >
-        <meshStandardMaterial color="#6B4423" metalness={0.3} roughness={0.6} />
-      </RoundedBox>
-      {/* Sign */}
-      <Text
-        position={[0, y + 0.5, FLOOR_DEPTH / 2 + 0.3]}
-        fontSize={0.35}
-        color="#FFD98A"
-        anchorX="center"
-        anchorY="bottom"
-        font="https://fonts.gstatic.com/s/spacegrotesk/v16/V8mDoQDjQSkFtoMM3T6r8E7mPbF4Cw.woff2"
-      >
-        CAFÉ TYCOON
-      </Text>
-    </group>
-  );
-}
-
-/* ---- Ground plane ---- */
-function Ground() {
-  return (
-    <group>
-      {/* Sidewalk */}
-      <mesh position={[0, -0.15, 0]} receiveShadow>
-        <boxGeometry args={[20, 0.1, 12]} />
-        <meshStandardMaterial color="#6B5744" />
-      </mesh>
-      {/* Road */}
-      <mesh position={[0, -0.2, 4]} receiveShadow>
-        <boxGeometry args={[20, 0.1, 4]} />
-        <meshStandardMaterial color="#3A3A3A" />
-      </mesh>
-      {/* Road line */}
-      <mesh position={[0, -0.14, 4]}>
-        <boxGeometry args={[18, 0.02, 0.15]} />
-        <meshStandardMaterial color="#666666" />
-      </mesh>
-    </group>
-  );
-}
-
-/* ---- Floating money label ---- */
-function FloatingMoney({
-  position,
-  amount,
-  opacity,
-}: {
-  position: [number, number, number];
-  amount: string;
-  opacity: number;
-}) {
-  const ref = useRef<THREE.Group>(null);
-
-  useFrame((_, delta) => {
-    if (ref.current) {
-      ref.current.position.y += delta * 0.5;
-    }
-  });
-
-  return (
-    <group ref={ref} position={position}>
-      <Text
-        fontSize={0.25}
-        color="#FFD98A"
-        anchorX="center"
-        anchorY="middle"
-        outlineWidth={0.02}
-        outlineColor="#000000"
-      >
-        {`+${amount}`}
-      </Text>
-    </group>
-  );
-}
-
-/* ---- Scene content (inside Canvas) ---- */
-function SceneContent({ state }: { state: GameState }) {
   const width = Math.max(1, Math.floor(state.floorWidth));
   const totalFloors = Math.max(1, state.floors);
+  const buildingWidth = width * SLOT_WIDTH;
 
+  // ---- Ground ----
+  const groundGeo = new THREE.BoxGeometry(24, 0.15, 16);
+  const groundMat = new THREE.MeshStandardMaterial({ color: 0x6b5744 });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.position.set(0, -0.15, 0);
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // Road
+  const roadGeo = new THREE.BoxGeometry(24, 0.12, 5);
+  const roadMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a });
+  const road = new THREE.Mesh(roadGeo, roadMat);
+  road.position.set(0, -0.22, 5);
+  scene.add(road);
+
+  // ---- Floors ----
   // Distribute equipment across floors
-  const floorEquipment: { id: GeneratorId; slot: number }[][] = Array.from(
+  const floorEquip: { id: GeneratorId; slot: number }[][] = Array.from(
     { length: totalFloors },
     () => [],
   );
-
   let flatIdx = 0;
   for (const def of GENERATORS) {
     const owned = state.generators[def.id] ?? 0;
     for (let i = 0; i < owned; i++) {
-      const floor = Math.floor(flatIdx / width);
-      const slot = flatIdx % width;
-      if (floor < totalFloors) {
-        floorEquipment[floor].push({ id: def.id, slot });
-      }
+      const f = Math.floor(flatIdx / width);
+      const s = flatIdx % width;
+      if (f < totalFloors) floorEquip[f].push({ id: def.id, slot: s });
       flatIdx++;
     }
   }
 
   // Count baristas per floor
-  const baristaPerFloor: number[] = Array.from({ length: totalFloors }, () => 0);
+  const baristasPerFloor: number[] = Array(totalFloors).fill(0);
   const baristaTotal = state.generators.barista ?? 0;
   for (let i = 0; i < baristaTotal; i++) {
     const f = Math.min(Math.floor(i / width), totalFloors - 1);
-    baristaPerFloor[f]++;
+    baristasPerFloor[f]++;
   }
 
-  const cameraDistance = Math.max(6, totalFloors * 1.2 + width * 0.8);
+  for (let fi = 0; fi < totalFloors; fi++) {
+    const y = fi * FLOOR_HEIGHT;
+    const floorColor = fi % 2 === 0 ? 0x3e2a1a : 0x4a3428;
 
-  return (
-    <>
-      {/* Lighting */}
-      <ambientLight intensity={0.5} color="#FFF6EC" />
-      <directionalLight
-        position={[5, 8, 5]}
-        intensity={1.2}
-        color="#FFD98A"
-        castShadow
-        shadow-mapSize={[1024, 1024]}
-      />
-      <pointLight position={[-3, 4, 2]} intensity={0.4} color="#FF8FB3" />
-      <pointLight position={[3, 2, -2]} intensity={0.3} color="#6FD3C0" />
+    // Floor slab
+    const slabGeo = new THREE.BoxGeometry(buildingWidth + 0.6, 0.18, FLOOR_DEPTH + 0.5);
+    const slabMat = new THREE.MeshStandardMaterial({ color: floorColor, metalness: 0.15, roughness: 0.8 });
+    const slab = new THREE.Mesh(slabGeo, slabMat);
+    slab.position.set(0, y, 0);
+    slab.receiveShadow = true;
+    scene.add(slab);
 
-      {/* Ground */}
-      <Ground />
+    // Back wall
+    const wallGeo = new THREE.BoxGeometry(buildingWidth + 0.4, FLOOR_HEIGHT * 0.85, 0.18);
+    const wallMat = new THREE.MeshStandardMaterial({
+      color: 0x5c3d2e,
+      metalness: 0.1,
+      roughness: 0.7,
+      transparent: true,
+      opacity: 0.85,
+    });
+    const backWall = new THREE.Mesh(wallGeo, wallMat);
+    backWall.position.set(0, y + FLOOR_HEIGHT * 0.425, -(FLOOR_DEPTH / 2 + 0.12));
+    scene.add(backWall);
 
-      {/* Building floors (rendered bottom to top) */}
-      {Array.from({ length: totalFloors }, (_, fi) => (
-        <BuildingFloor
-          key={fi}
-          floorIndex={fi}
-          width={width}
-          equipment={floorEquipment[fi] || []}
-          baristaCount={baristaPerFloor[fi] || 0}
-          totalFloors={totalFloors}
-        />
-      ))}
+    // Left wall
+    const sideWallGeo = new THREE.BoxGeometry(0.18, FLOOR_HEIGHT * 0.85, FLOOR_DEPTH + 0.3);
+    const leftWall = new THREE.Mesh(sideWallGeo, wallMat.clone());
+    leftWall.material.opacity = 0.7;
+    leftWall.position.set(-(buildingWidth / 2 + 0.22), y + FLOOR_HEIGHT * 0.425, 0);
+    scene.add(leftWall);
 
-      {/* Roof */}
-      <BuildingRoof width={width} floorCount={totalFloors} />
+    // Right wall
+    const rightWall = new THREE.Mesh(sideWallGeo, wallMat.clone());
+    rightWall.material.opacity = 0.7;
+    rightWall.position.set(buildingWidth / 2 + 0.22, y + FLOOR_HEIGHT * 0.425, 0);
+    scene.add(rightWall);
 
-      {/* Camera */}
-      <OrbitControls
-        enablePan={false}
-        minDistance={cameraDistance * 0.7}
-        maxDistance={cameraDistance * 1.5}
-        minPolarAngle={0.3}
-        maxPolarAngle={Math.PI / 2.2}
-        target={[0, (totalFloors * FLOOR_HEIGHT) / 2, 0]}
-        autoRotate
-        autoRotateSpeed={0.5}
-      />
-    </>
-  );
+    // Equipment blocks
+    for (const eq of floorEquip[fi]) {
+      const color = EQUIP_COLORS[eq.id] ?? 0xffffff;
+      const eqGeo = new THREE.BoxGeometry(0.55, 0.55, 0.55);
+      const eqMat = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 0.25,
+        metalness: 0.3,
+        roughness: 0.4,
+      });
+      const eqMesh = new THREE.Mesh(eqGeo, eqMat);
+      const xPos = (eq.slot - (width - 1) / 2) * SLOT_WIDTH;
+      eqMesh.position.set(xPos, y + 0.45, 0);
+      eqMesh.castShadow = true;
+      eqMesh.userData = { rotate: true };
+      scene.add(eqMesh);
+
+      // Small label sphere on top
+      const labelGeo = new THREE.SphereGeometry(0.08, 8, 8);
+      const labelMat = new THREE.MeshStandardMaterial({ color: 0xffd98a, emissive: 0xffd98a, emissiveIntensity: 0.5 });
+      const label = new THREE.Mesh(labelGeo, labelMat);
+      label.position.set(xPos, y + 0.82, 0);
+      scene.add(label);
+    }
+
+    // Barista characters
+    for (let bi = 0; bi < baristasPerFloor[fi]; bi++) {
+      const charGroup = new THREE.Group();
+      const hue = (bi * 47 + fi * 120) % 360;
+      const bodyColor = new THREE.Color().setHSL(hue / 360, 0.6, 0.55);
+      const headColor = new THREE.Color().setHSL(hue / 360, 0.4, 0.8);
+
+      // Body capsule
+      const bodyGeo = new THREE.CapsuleGeometry(0.12, 0.28, 4, 8);
+      const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, metalness: 0.1, roughness: 0.6 });
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.position.set(0, 0.25, 0);
+      charGroup.add(body);
+
+      // Head
+      const headGeo = new THREE.SphereGeometry(0.14, 8, 8);
+      const headMat = new THREE.MeshStandardMaterial({ color: headColor, metalness: 0.1, roughness: 0.5 });
+      const head = new THREE.Mesh(headGeo, headMat);
+      head.position.set(0, 0.65, 0);
+      charGroup.add(head);
+
+      const startX = ((bi % width) - (width - 1) / 2) * SLOT_WIDTH;
+      charGroup.position.set(startX, y + 0.1, 0.4);
+      charGroup.userData = {
+        walkPhase: Math.random() * Math.PI * 2,
+        floorY: y + 0.1,
+        halfW: (buildingWidth / 2) - 0.3,
+        floorIndex: fi,
+      };
+      scene.add(charGroup);
+    }
+  }
+
+  // ---- Roof ----
+  const roofY = totalFloors * FLOOR_HEIGHT;
+  const roofGeo = new THREE.BoxGeometry(buildingWidth + 0.8, 0.22, FLOOR_DEPTH + 0.6);
+  const roofMat = new THREE.MeshStandardMaterial({ color: 0x6b4423, metalness: 0.3, roughness: 0.6 });
+  const roof = new THREE.Mesh(roofGeo, roofMat);
+  roof.position.set(0, roofY + 0.1, 0);
+  roof.castShadow = true;
+  scene.add(roof);
+
+  // Sign (golden sphere as a beacon)
+  const signGeo = new THREE.SphereGeometry(0.25, 12, 12);
+  const signMat = new THREE.MeshStandardMaterial({ color: 0xffd98a, emissive: 0xffd98a, emissiveIntensity: 0.6 });
+  const sign = new THREE.Mesh(signGeo, signMat);
+  sign.position.set(0, roofY + 0.5, FLOOR_DEPTH / 2 + 0.3);
+  scene.add(sign);
 }
 
-/* ---- Main exported component ---- */
 export function CafeScene3D({ state }: { state: GameState }) {
-  const totalFloors = Math.max(1, state.floors);
-  const cameraDistance = Math.max(6, totalFloors * 1.2 + state.floorWidth * 0.8);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const rafRef = useRef<number>(0);
+  const stateRef = useRef(state);
+  const isDragging = useRef(false);
+  const lastMouse = useRef({ x: 0, y: 0 });
+  const cameraAngle = useRef({ theta: Math.PI / 4, phi: Math.PI / 3.5 });
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || Platform.OS !== 'web') return;
+
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x1e140d);
+    renderer.shadowMap.enabled = true;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
+    container.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+
+    // Scene
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x1e140d, 0.03);
+    sceneRef.current = scene;
+
+    // Camera
+    const camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 100);
+    cameraRef.current = camera;
+
+    // Lighting
+    const ambient = new THREE.AmbientLight(0xfff6ec, 0.5);
+    scene.add(ambient);
+
+    const dirLight = new THREE.DirectionalLight(0xffd98a, 1.3);
+    dirLight.position.set(5, 10, 5);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.set(1024, 1024);
+    scene.add(dirLight);
+
+    const pinkLight = new THREE.PointLight(0xff8fb3, 0.5, 20);
+    pinkLight.position.set(-4, 5, 3);
+    scene.add(pinkLight);
+
+    const tealLight = new THREE.PointLight(0x6fd3c0, 0.4, 20);
+    tealLight.position.set(4, 3, -3);
+    scene.add(tealLight);
+
+    // Build initial scene
+    buildScene(state, scene);
+
+    // Position camera
+    const totalFloors = Math.max(1, state.floors);
+    const dist = Math.max(7, totalFloors * 1.5 + state.floorWidth * 0.9);
+    const a = cameraAngle.current;
+    camera.position.set(
+      dist * Math.sin(a.phi) * Math.cos(a.theta),
+      totalFloors * FLOOR_HEIGHT * 0.5 + dist * 0.3,
+      dist * Math.sin(a.phi) * Math.sin(a.theta),
+    );
+    camera.lookAt(0, totalFloors * FLOOR_HEIGHT * 0.4, 0);
+
+    // Animation loop
+    let time = 0;
+    const animate = () => {
+      rafRef.current = requestAnimationFrame(animate);
+      time += 0.016;
+
+      // Rotate equipment blocks
+      scene.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.userData.rotate) {
+          child.rotation.y += 0.005;
+        }
+        // Walk barista characters
+        if (child instanceof THREE.Group && child.userData.walkPhase !== undefined) {
+          const ud = child.userData;
+          ud.walkPhase += 0.03;
+          const newX = Math.sin(ud.walkPhase) * ud.halfW;
+          child.position.x = THREE.MathUtils.lerp(child.position.x, newX, 0.05);
+          child.position.y = ud.floorY + Math.abs(Math.sin(ud.walkPhase * 3)) * 0.04;
+        }
+      });
+
+      // Auto-rotate camera if not dragging
+      if (!isDragging.current) {
+        a.theta += 0.003;
+        const target = new THREE.Vector3(0, totalFloors * FLOOR_HEIGHT * 0.4, 0);
+        camera.position.set(
+          dist * Math.sin(a.phi) * Math.cos(a.theta),
+          totalFloors * FLOOR_HEIGHT * 0.5 + dist * 0.3,
+          dist * Math.sin(a.phi) * Math.sin(a.theta),
+        );
+        camera.lookAt(target);
+      }
+
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    // Mouse/touch orbit controls
+    const onPointerDown = (e: PointerEvent) => {
+      isDragging.current = true;
+      lastMouse.current = { x: e.clientX, y: e.clientY };
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (!isDragging.current) return;
+      const dx = e.clientX - lastMouse.current.x;
+      const dy = e.clientY - lastMouse.current.y;
+      lastMouse.current = { x: e.clientX, y: e.clientY };
+      a.theta -= dx * 0.005;
+      a.phi = Math.max(0.3, Math.min(Math.PI / 2.1, a.phi - dy * 0.005));
+    };
+    const onPointerUp = () => {
+      isDragging.current = false;
+    };
+
+    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+
+    // Resize handler
+    const onResize = () => {
+      const nw = container.clientWidth;
+      const nh = container.clientHeight;
+      renderer.setSize(nw, nh);
+      camera.aspect = nw / nh;
+      camera.updateProjectionMatrix();
+    };
+    window.addEventListener('resize', onResize);
+
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('resize', onResize);
+      renderer.dispose();
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement);
+      }
+    };
+  }, []); // mount once
+
+  // Rebuild scene when state changes (equipment/floors)
+  useEffect(() => {
+    stateRef.current = state;
+    if (sceneRef.current) {
+      buildScene(state, sceneRef.current);
+    }
+  }, [state]);
 
   return (
-    <Canvas
-      camera={{
-        position: [cameraDistance * 0.7, totalFloors * FLOOR_HEIGHT * 0.6, cameraDistance * 0.5],
-        fov: 50,
-        near: 0.1,
-        far: 100,
-      }}
-      shadows
-      style={{ width: '100%', height: '100%' }}
-      gl={{ antialias: true, alpha: false }}
-      onCreated={({ gl }) => {
-        gl.setClearColor('#1E140D');
-        gl.toneMapping = THREE.ACESFilmicToneMapping;
-        gl.toneMappingExposure = 1.1;
-      }}
-    >
-      <Suspense fallback={null}>
-        <SceneContent state={state} />
-      </Suspense>
-    </Canvas>
+    <View style={styles.container}>
+      <div
+        ref={containerRef}
+        style={{ width: '100%', height: '100%' }}
+      />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+});
