@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,7 +10,7 @@ import { derive, prestigeGain, prestigeMultiplier } from '@/tycoon/engine';
 import { formatMoney } from '@/tycoon/format';
 import { playCue, syncSoundMute } from '@/tycoon/sound';
 import { DonutIcon } from '@/tycoon/art/DonutIcon';
-import { TapDonut } from '@/tycoon/ui/TapDonut';
+import { CafeWorld } from '@/tycoon/art/CafeWorld';
 import { ShopPanel, UpgradesPanel, StatsPanel } from '@/tycoon/ui/panels';
 import { OfflineSheet, PrestigeSheet, SettingsSheet } from '@/tycoon/ui/sheets';
 import { CountUp } from '@/ui/components/CountUp';
@@ -18,7 +18,7 @@ import { CountUp } from '@/ui/components/CountUp';
 type Tab = 'shop' | 'upgrades' | 'stats';
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'shop', label: 'SHOP' },
+  { id: 'shop', label: 'EQUIP' },
   { id: 'upgrades', label: 'UPGRADES' },
   { id: 'stats', label: 'STATS' },
 ];
@@ -29,6 +29,7 @@ export default function DonutTycoon() {
 
   const insets = useSafeAreaInsets();
   const state = useTycoon((s) => s.state);
+  const world = useTycoon((s) => s.world);
   const settings = useTycoon((s) => s.settings);
   const offlineGain = useTycoon((s) => s.offlineGain);
   const offlineSeconds = useTycoon((s) => s.offlineSeconds);
@@ -41,7 +42,7 @@ export default function DonutTycoon() {
 
   const d = useMemo(() => derive(state), [state]);
 
-  const onTap = useCallback(() => {
+  const onTapBuilding = useCallback(() => {
     useTycoon.getState().tap();
     playCue('tap');
   }, []);
@@ -56,9 +57,9 @@ export default function DonutTycoon() {
           <Text size={16}>←</Text>
         </PressableScale>
         <View style={styles.brand}>
-          <DonutIcon size={30} />
+          <DonutIcon size={24} />
           <Text variant="title" style={{ letterSpacing: 1 }}>
-            DONUT TYCOON
+            CAFÉ TYCOON
           </Text>
         </View>
         <PressableScale onPress={() => setShowSettings(true)} scaleTo={0.9} style={styles.gear}>
@@ -66,9 +67,9 @@ export default function DonutTycoon() {
         </PressableScale>
       </View>
 
-      {/* cash */}
+      {/* cash + income */}
       <View style={styles.cashWrap}>
-        <CountUp value={state.cash} formatter={formatMoney} variant="display" style={{ fontSize: 44 }} />
+        <CountUp value={state.cash} formatter={formatMoney} variant="display" style={{ fontSize: 40 }} />
         <View style={styles.cashMeta}>
           <Text variant="caption" muted>
             {formatMoney(d.cps)} / sec
@@ -80,13 +81,21 @@ export default function DonutTycoon() {
               </Text>
             </View>
           ) : null}
+          <Text variant="micro" color={palette.textFaint}>
+            floor {state.floors} · {state.floorWidth} wide
+          </Text>
         </View>
       </View>
 
-      {/* tap donut */}
-      <View style={styles.tapArea}>
-        <TapDonut tapPower={d.tapPower} onTap={onTap} />
-      </View>
+      {/* Café World — the hero visual */}
+      <ScrollView style={styles.worldScroll} contentContainerStyle={styles.worldContent}>
+        <CafeWorld
+          state={state}
+          characters={world.characters}
+          floaters={world.floaters}
+          onTapBuilding={onTapBuilding}
+        />
+      </ScrollView>
 
       {/* tabs + panel */}
       <View style={[styles.bottom, { paddingBottom: insets.bottom + spacing.sm }]}>
@@ -115,6 +124,12 @@ export default function DonutTycoon() {
               state={state}
               onBuy={(id) => {
                 if (useTycoon.getState().buyGenerator(id)) playCue('buy');
+              }}
+              onBuyFloor={() => {
+                if (useTycoon.getState().buyFloor()) playCue('buy');
+              }}
+              onBuyRoom={() => {
+                if (useTycoon.getState().buyRoom()) playCue('buy');
               }}
             />
           )}
@@ -183,12 +198,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.xs,
   },
   back: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,236,214,0.07)',
@@ -197,17 +212,17 @@ const styles = StyleSheet.create({
   },
   brand: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1, justifyContent: 'center' },
   gear: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,236,214,0.07)',
     borderWidth: 1,
     borderColor: palette.hairline,
   },
-  cashWrap: { alignItems: 'center', gap: 2, paddingVertical: spacing.sm },
-  cashMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  cashWrap: { alignItems: 'center', gap: 2, paddingVertical: spacing.xs },
+  cashMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap', justifyContent: 'center' },
   bonusChip: {
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
@@ -216,8 +231,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,217,138,0.3)',
   },
-  tapArea: { flex: 1.15, minHeight: 220 },
-  bottom: { flex: 1, paddingHorizontal: spacing.md },
+  worldScroll: { flex: 1 },
+  worldContent: { paddingBottom: spacing.sm },
+  bottom: { maxHeight: '45%', paddingHorizontal: spacing.md },
   tabs: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
   tab: {
     flex: 1,

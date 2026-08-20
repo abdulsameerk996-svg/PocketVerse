@@ -3,11 +3,11 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle, Line, Rect } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { PressableScale, Text, palette, radius, spacing } from '@/ui';
 import { useRings } from '@/rings/store';
 import { useRingsTicker } from '@/rings/ticker';
-import { idleBallY, ringRot, ringY } from '@/rings/logic';
+import { comboMeter, idleBallY, ringRot, ringY } from '@/rings/logic';
 
 const NEON = {
   cyan: '#22D3EE',
@@ -16,6 +16,9 @@ const NEON = {
   gold: '#FFD98A',
   bg: ['#1A0B2E', '#0D0520', '#070312'] as const,
 };
+
+/** Length of the combo-meter semicircle arc (r=32) for the dash trick. */
+const ARC_LEN = Math.PI * 32;
 
 /**
  * NEON RINGS
@@ -36,6 +39,10 @@ export default function NeonRings() {
   const ballY = state.status === 'flying' ? state.ballY : idleBallY(state);
   const over = state.status === 'over';
   const levelUp = state.levelUpFlash > 0;
+  const hasHunters = state.rings.some((r) => r.chase > 0);
+  const combo = state.combo;
+  const meter = comboMeter(state);
+  const meterColor = combo >= 6 ? NEON.gold : combo >= 3 ? NEON.magenta : NEON.cyan;
 
   return (
     <View style={styles.root}>
@@ -63,7 +70,7 @@ export default function NeonRings() {
               LEVEL {state.level}
             </Text>
             <Text variant="caption" color={NEON.magenta}>
-              {state.rings.length} rings · tighter gaps
+              {state.rings.length} rings · {hasHunters ? 'hunters inbound' : 'tighter gaps'}
             </Text>
           </View>
         ) : null}
@@ -74,16 +81,41 @@ export default function NeonRings() {
               TAP TO LAUNCH
             </Text>
             <Text variant="caption" muted style={{ marginTop: 4 }}>
-              time the ring gaps · {state.rings.length} rings ahead
+              {hasHunters ? 'watch the hunters · ' : ''}time the ring gaps · {state.rings.length} rings ahead
             </Text>
           </View>
         ) : null}
 
-        {state.combo >= 3 && !over ? (
-          <View pointerEvents="none" style={styles.combo}>
-            <Text variant="heading" color={NEON.magenta}>
-              {state.combo}× COMBO
-            </Text>
+        {combo >= 1 && !over && !levelUp ? (
+          <View pointerEvents="none" style={styles.comboWrap}>
+            <Svg width={88} height={44} viewBox="0 0 88 44" style={styles.comboArc}>
+              {/* track */}
+              <Path
+                d="M 12 38 A 32 32 0 0 1 76 38"
+                stroke="rgba(255,255,255,0.14)"
+                strokeWidth={5}
+                fill="none"
+                strokeLinecap="round"
+              />
+              {/* draining meter */}
+              <Path
+                d="M 12 38 A 32 32 0 0 1 76 38"
+                stroke={meterColor}
+                strokeWidth={5}
+                fill="none"
+                strokeLinecap="round"
+                strokeDasharray={`${ARC_LEN * meter} ${ARC_LEN}`}
+                opacity={0.95}
+              />
+            </Svg>
+            <View style={styles.comboBadge}>
+              <Text variant="micro" color={meterColor}>
+                COMBO
+              </Text>
+              <Text variant="heading" numeric color={meterColor} style={{ textShadowColor: meterColor, textShadowRadius: 8 }}>
+                ×{combo}
+              </Text>
+            </View>
           </View>
         ) : null}
       </Pressable>
@@ -156,19 +188,31 @@ const Scene = memo(function Scene({
         const gapLen = 2 * r * ring.gapHalf;
         const solid = circum - gapLen;
         const passed = state.nextRing > ring.id;
+        const hunter = ring.chase > 0;
+        const stroke = passed ? 'rgba(34,211,238,0.25)' : hunter ? NEON.violet : NEON.magenta;
         return (
-          <Circle
-            key={ring.id}
-            cx={cx}
-            cy={cy}
-            r={r}
-            stroke={passed ? 'rgba(34,211,238,0.25)' : NEON.magenta}
-            strokeWidth={5}
-            strokeLinecap="round"
-            strokeDasharray={`${solid} ${gapLen}`}
-            rotation={90 + gapDeg + rotDeg}
-            opacity={passed ? 0.35 : 1}
-          />
+          <React.Fragment key={ring.id}>
+            {hunter && !passed ? (
+              <>
+                {/* hunter wake — pulsing glow so chasers read as threats */}
+                <Circle cx={cx} cy={cy} r={r + 3} stroke="rgba(124,92,255,0.28)" strokeWidth={1.5} fill="none" />
+                {/* hunter core + reticle */}
+                <Circle cx={cx} cy={cy} r={2.4} fill={NEON.violet} />
+                <Circle cx={cx - 4} cy={cy} r={1.1} fill="rgba(255,255,255,0.7)" />
+              </>
+            ) : null}
+            <Circle
+              cx={cx}
+              cy={cy}
+              r={r}
+              stroke={stroke}
+              strokeWidth={5}
+              strokeLinecap="round"
+              strokeDasharray={`${solid} ${gapLen}`}
+              rotation={90 + gapDeg + rotDeg}
+              opacity={passed ? 0.35 : 1}
+            />
+          </React.Fragment>
         );
       })}
 
@@ -250,7 +294,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(34,211,238,0.35)',
   },
   launchHint: { position: 'absolute', bottom: 40, alignItems: 'center' },
-  combo: { position: 'absolute', top: '16%', alignSelf: 'center' },
+  comboWrap: { position: 'absolute', top: 10, alignSelf: 'center', alignItems: 'center' },
+  comboArc: { position: 'absolute', top: 0 },
+  comboBadge: { marginTop: 8, alignItems: 'center', gap: 0 },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',

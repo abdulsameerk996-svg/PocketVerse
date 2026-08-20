@@ -15,15 +15,28 @@ export const BALANCE = {
   offlineMinSeconds: 60,
 } as const;
 
+/** Building / tower expansion constants. */
+export const BUILDING = {
+  baseFloorCost: 500,
+  floorCostGrowth: 2.8,
+  maxFloors: 8,
+  baseRoomCost: 300,
+  roomCostGrowth: 2.2,
+  maxWidth: 6,
+  startingWidth: 3,
+  /** Height of each floor in the visual (design token, not engine). */
+  floorVisualHeight: 80,
+} as const;
+
 export const GENERATORS: GeneratorDef[] = [
-  { id: 'barista', name: 'Barista', tagline: 'Hands pour every cup', baseCost: 15, baseCps: 0.1, costGrowth: 1.15 },
-  { id: 'fryer', name: 'Donut Fryer', tagline: 'Golden rings, non-stop', baseCost: 120, baseCps: 1, costGrowth: 1.15, unlockRequires: 'barista' },
-  { id: 'display', name: 'Display Case', tagline: 'Glaze catches every eye', baseCost: 1_100, baseCps: 8, costGrowth: 1.15, unlockRequires: 'fryer' },
-  { id: 'drive', name: 'Drive-Thru', tagline: 'Cars queue around the block', baseCost: 12_000, baseCps: 47, costGrowth: 1.15, unlockRequires: 'display' },
-  { id: 'roaster', name: 'Coffee Roaster', tagline: 'Fresh beans, big margins', baseCost: 130_000, baseCps: 260, costGrowth: 1.15, unlockRequires: 'drive' },
-  { id: 'van', name: 'Delivery Van', tagline: 'Café on every corner', baseCost: 1_400_000, baseCps: 1_400, costGrowth: 1.15, unlockRequires: 'roaster' },
-  { id: 'franchise', name: 'Second Store', tagline: 'Your empire spreads', baseCost: 20_000_000, baseCps: 7_800, costGrowth: 1.15, unlockRequires: 'van' },
-  { id: 'robo', name: 'Robo-Barista', tagline: 'Never sleeps, never spills', baseCost: 330_000_000, baseCps: 44_000, costGrowth: 1.15, unlockRequires: 'franchise' },
+  { id: 'barista', name: 'Barista', tagline: 'Hands pour every cup', baseCost: 15, baseCps: 0.1, costGrowth: 1.15, glyph: '☕' },
+  { id: 'fryer', name: 'Donut Fryer', tagline: 'Golden rings, non-stop', baseCost: 120, baseCps: 1, costGrowth: 1.15, unlockRequires: 'barista', glyph: '🍩' },
+  { id: 'display', name: 'Display Case', tagline: 'Glaze catches every eye', baseCost: 1_100, baseCps: 8, costGrowth: 1.15, unlockRequires: 'fryer', glyph: '🧁' },
+  { id: 'drive', name: 'Drive-Thru', tagline: 'Cars queue around the block', baseCost: 12_000, baseCps: 47, costGrowth: 1.15, unlockRequires: 'display', glyph: '🚗' },
+  { id: 'roaster', name: 'Coffee Roaster', tagline: 'Fresh beans, big margins', baseCost: 130_000, baseCps: 260, costGrowth: 1.15, unlockRequires: 'drive', glyph: '🫘' },
+  { id: 'van', name: 'Delivery Van', tagline: 'Café on every corner', baseCost: 1_400_000, baseCps: 1_400, costGrowth: 1.15, unlockRequires: 'roaster', glyph: '🚐' },
+  { id: 'franchise', name: 'Second Store', tagline: 'Your empire spreads', baseCost: 20_000_000, baseCps: 7_800, costGrowth: 1.15, unlockRequires: 'van', glyph: '🏪' },
+  { id: 'robo', name: 'Robo-Barista', tagline: 'Never sleeps, never spills', baseCost: 330_000_000, baseCps: 44_000, costGrowth: 1.15, unlockRequires: 'franchise', glyph: '🤖' },
 ];
 
 export const GENERATOR_MAP: Record<GeneratorId, GeneratorDef> = Object.fromEntries(

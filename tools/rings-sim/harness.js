@@ -46,6 +46,72 @@ console.log('Level generation');
   }
 }
 
+console.log('Chaser rings');
+{
+  check('levels 1-2 have no chasers', L.buildLevel(1).every((r) => r.chase === 0) && L.buildLevel(2).every((r) => r.chase === 0));
+  const l3 = L.buildLevel(3);
+  const chasers = l3.filter((r) => r.chase > 0);
+  check('level 3 has exactly one chaser', chasers.length === 1, `count=${chasers.length}`);
+  check('level 3 chaser is the top ring', chasers[0].id === l3.length - 1);
+  check('level 5 has two chasers', L.buildLevel(5).filter((r) => r.chase > 0).length === 2);
+  check('level 7 has three chasers (capped)', L.buildLevel(7).filter((r) => r.chase > 0).length === 3 && L.buildLevel(99).filter((r) => r.chase > 0).length === 3);
+  check('chaser cur starts at baseY', chasers[0].cur === chasers[0].baseY);
+  check('chaser ringY returns finite in-bounds cur', (() => {
+    const y = L.ringY(chasers[0], 1.234);
+    return fin(y) && y > 0 && y < 1;
+  })());
+  check('chaser determinism (same level, same hunters)', JSON.stringify(L.buildLevel(3)) === JSON.stringify(L.buildLevel(3)));
+}
+
+console.log('Chaser behaviour');
+{
+  // A chaser converges on the flying ball.
+  let s = L.createRun(3);
+  const chaserId = s.rings.find((r) => r.chase > 0).id;
+  s = { ...s, status: 'flying', launched: true, ballY: 0.5, nextRing: chaserId };
+  const baseY = s.rings[chaserId].baseY;
+  const moved = L.step(s, 0.2);
+  const cur = moved.rings[chaserId].cur;
+  check('chaser tracks the flying ball', Math.abs(cur - 0.5) < Math.abs(baseY - 0.5), `cur=${cur.toFixed(3)} base=${baseY.toFixed(3)}`);
+
+  // A passed chaser settles back to rest height while the ball flies on.
+  let s2 = L.createRun(3);
+  s2 = { ...s2, status: 'flying', launched: true, ballY: 0.1, nextRing: s2.rings.length };
+  s2 = { ...s2, rings: s2.rings.map((r) => (r.chase > 0 ? { ...r, cur: 0.2 } : r)) };
+  const settled = L.step(s2, 0.5);
+  const back = settled.rings.find((r) => r.chase > 0);
+  check('passed chaser settles toward baseY', Math.abs(back.cur - back.baseY) < Math.abs(0.2 - back.baseY), `cur=${back.cur.toFixed(3)} base=${back.baseY.toFixed(3)}`);
+
+  // Idle: chaser drifts home.
+  let s3 = L.createRun(3);
+  s3 = { ...s3, rings: s3.rings.map((r) => (r.chase > 0 ? { ...r, cur: 0.1 } : r)) };
+  const idled = L.step(s3, 0.5);
+  const home = idled.rings.find((r) => r.chase > 0);
+  check('idle chaser returns toward baseY', Math.abs(home.cur - home.baseY) < Math.abs(0.1 - home.baseY), `cur=${home.cur.toFixed(3)}`);
+}
+
+console.log('Combo meter');
+{
+  let s = L.createRun(1);
+  check('meter 0 with no combo', L.comboMeter(s) === 0);
+  s = { ...s, status: 'flying', launched: true, ballY: 0, lastPassAt: 0, combo: 1, rings: [] };
+  const fresh = L.comboMeter(s);
+  check('meter near full right after a pass', fresh > 0.999, `meter=${fresh}`);
+  const drained = advance(s, 0.45);
+  const half = L.comboMeter(drained);
+  check('meter drains with time', half > 0.3 && half < 0.7, `meter=${half.toFixed(3)}`);
+  const expired = advance(s, 1.1);
+  check('meter hits 0 after the window', L.comboMeter(expired) === 0);
+  check('meter never negative or >1', (() => {
+    let ok = true;
+    for (let t = 0; t < 2; t += 0.05) {
+      const m = L.comboMeter({ ...s, time: t });
+      if (!(m >= 0 && m <= 1)) ok = false;
+    }
+    return ok;
+  })());
+}
+
 console.log('Ring motion');
 {
   const ring = L.buildLevel(1)[0];
@@ -163,6 +229,39 @@ console.log('60-second fuzz');
   }
   check('fuzz stays finite (60s sim)', brokeAt === -1, brokeAt >= 0 ? `broke at ${brokeAt}` : 'ok');
   check('fuzz never lost best score', s.best >= 0 && fin(s.best));
+}
+
+console.log('Chaser fuzz (level 6, hunters guaranteed)');
+{
+  let s = L.createRun(6, 0, 1);
+  let brokeAt = -1;
+  let sawChaser = false;
+  for (let i = 0; i < 15 * 120; i++) {
+    if (s.status === 'idle') s = L.tap(s);
+    s = L.step(s, 1 / 120);
+    if (!fin(s.ballY) || !fin(s.time) || !fin(s.score) || Number.isNaN(s.level)) {
+      brokeAt = i;
+      break;
+    }
+    for (const r of s.rings) {
+      if (r.chase > 0) {
+        sawChaser = true;
+        if (!fin(r.cur) || r.cur < 0 || r.cur > 1) {
+          brokeAt = i;
+          break;
+        }
+      }
+    }
+    if (brokeAt >= 0) break;
+    const m = L.comboMeter(s);
+    if (!(m >= 0 && m <= 1)) {
+      brokeAt = i;
+      break;
+    }
+    if (s.status === 'over') s = L.createRun(6, s.best, s.bestLevel);
+  }
+  check('chaser fuzz stays finite (15s sim)', brokeAt === -1, brokeAt >= 0 ? `broke at ${brokeAt}` : 'ok');
+  check('chaser fuzz exercised hunters', sawChaser);
 }
 
 console.log('Save sanitising');

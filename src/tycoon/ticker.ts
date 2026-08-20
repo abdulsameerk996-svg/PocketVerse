@@ -1,62 +1,58 @@
 import { useEffect, useRef } from 'react';
-import { AppState, Platform } from 'react-native';
+import { AppState, type AppStateStatus } from 'react-native';
 import { useTycoon } from './store';
-import { syncSoundMute } from './sound';
+
+const TICK_MS = 16; // ~60 fps
+const SAVE_INTERVAL_MS = 5_000;
 
 /**
- * Drives the idle loop:
- *  - hydrate once on mount (credits offline earnings)
- *  - `advance` on a 250ms tick using real wall-clock deltas, so throttled
- *    timers in background tabs never lose or double-count income
- *  - autosave every 6s + flush on background/hide
+ * Drives the tycoon simulation and world at ~60fps while the app is in the
+ * foreground. Pauses on background, catches up on resume (capped by the
+ * offline guard in the engine).
  */
 export function useTycoonTicker() {
-  const hydrate = useTycoon((s) => s.hydrate);
-  const advance = useTycoon((s) => s.advance);
-  const saveNow = useTycoon((s) => s.saveNow);
-  const lastTick = useRef(Date.now());
+  const rafRef = useRef<number | null>(null);
+  const lastRef = useRef<number>(performance.now());
+  const saveRef = useRef(0);
 
   useEffect(() => {
-    void hydrate();
-    syncSoundMute();
-  }, [hydrate]);
+    let running = true;
 
-  useEffect(() => {
-    const id = setInterval(() => {
-      const now = Date.now();
-      const dt = (now - lastTick.current) / 1000;
-      lastTick.current = now;
-      if (dt > 0 && dt < 60) advance(dt);
-      syncSoundMute();
-    }, 250);
-    const saveId = setInterval(() => {
-      void saveNow();
-    }, 6000);
+    const tick = (now: number) => {
+      if (!running) return;
 
-    const onHide = () => {
-      lastTick.current = Date.now();
-      void saveNow();
+      const dt = Math.min((now - lastRef.current) / 1000, 0.5);
+      lastRef.current = now;
+
+      useTycoon.getState().advance(dt);
+      useTycoon.getState().tickWorld(dt);
+
+      saveRef.current += dt * 1000;
+      if (saveRef.current > SAVE_INTERVAL_MS) {
+        saveRef.current = 0;
+        void useTycoon.getState().saveNow();
+      }
+
+      rafRef.current = requestAnimationFrame(tick);
     };
-    const appSub = AppState.addEventListener('change', (status) => {
-      if (status !== 'active') onHide();
-      else lastTick.current = Date.now();
-    });
 
-    const onVisibility = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') onHide();
-      else lastTick.current = Date.now();
+    rafRef.current = requestAnimationFrame(tick);
+
+    const onApp = (s: AppStateStatus) => {
+      if (s === 'active') {
+        lastRef.current = performance.now();
+      } else {
+        void useTycoon.getState().saveNow();
+      }
     };
-    let visSub: (() => void) | undefined;
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', onVisibility);
-      visSub = () => document.removeEventListener('visibilitychange', onVisibility);
-    }
+
+    const sub = AppState.addEventListener('change', onApp);
 
     return () => {
-      clearInterval(id);
-      clearInterval(saveId);
-      appSub.remove();
-      visSub?.();
+      running = false;
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      sub.remove();
+      void useTycoon.getState().saveNow();
     };
-  }, [advance, saveNow]);
+  }, []);
 }

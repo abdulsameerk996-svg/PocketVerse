@@ -22,7 +22,7 @@ export const SettingsSheet = memo(function SettingsSheet({
   const [confirming, setConfirming] = useState(false);
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Settings" subtitle="Donut Tycoon">
+    <Sheet visible={visible} onClose={onClose} title="Settings" subtitle="Café Tycoon">
       <View style={styles.stack}>
         <ToggleRow
           label="Sound effects"
@@ -44,7 +44,7 @@ export const SettingsSheet = memo(function SettingsSheet({
         {confirming ? (
           <View style={styles.confirmBox}>
             <Text variant="body" center>
-              Wipe your whole café and start over?
+              Wipe your entire café and start over?
             </Text>
             <View style={styles.confirmRow}>
               <Button label="Cancel" variant="secondary" size="sm" onPress={() => setConfirming(false)} style={{ flex: 1 }} />

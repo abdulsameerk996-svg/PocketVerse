@@ -1,62 +1,170 @@
 import React, { memo } from 'react';
 import { StyleSheet, View, ScrollView } from 'react-native';
 import { Button, Card, ProgressBar, Text, palette, radius, spacing } from '@/ui';
-import { GENERATORS, MILESTONES, UPGRADES } from '../data';
+import { BUILDING, GENERATORS, MILESTONES, UPGRADES } from '../data';
 import {
+  canBuyFloor,
+  canBuyRoom,
   canClaimMilestone,
   costOf,
   derive,
+  floorCost,
+  generatorIncomePreview,
   generatorUnlocked,
   milestoneProgress,
   prestigeGain,
   prestigeMultiplier,
+  roomCost,
+  upgradeIncomePreview,
   upgradeUnlocked,
 } from '../engine';
 import type { GameState, GeneratorId } from '../types';
 import { formatDuration, formatMoney, formatNumber } from '../format';
-import { GeneratorIcon } from '../art/GeneratorIcon';
 
 /* ------------------------------------------------------------- SHOP ---- */
 
 export const ShopPanel = memo(function ShopPanel({
   state,
   onBuy,
+  onBuyFloor,
+  onBuyRoom,
 }: {
   state: GameState;
   onBuy: (id: GeneratorId) => void;
+  onBuyFloor: () => void;
+  onBuyRoom: () => void;
 }) {
   const d = derive(state);
+
+  // Building expansion section
+  const fCost = floorCost(state);
+  const rCost = roomCost(state);
+  const canFloor = canBuyFloor(state);
+  const canRoom = canBuyRoom(state);
+  const floorPayback = d.cps > 0 ? fCost / (d.cps * 0.1) : Infinity; // rough: floor doubles capacity
+
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.panelPad}>
+      {/* Building expansion */}
+      <Text variant="micro" color={palette.gold} style={styles.sectionLabel}>
+        🏗️ BUILD YOUR CAFÉ
+      </Text>
+
+      <Card variant="glass" padding={spacing.md} style={styles.row}>
+        <View style={[styles.rowIcon, { backgroundColor: 'rgba(111,211,192,0.1)' }]}>
+          <Text size={20}>⬆️</Text>
+        </View>
+        <View style={styles.rowBody}>
+          <View style={styles.rowTitleLine}>
+            <Text variant="subheading">New Floor</Text>
+            <Text variant="caption" color={palette.cyan} numeric>
+              {state.floors}/{BUILDING.maxFloors}
+            </Text>
+          </View>
+          <Text variant="caption" muted numberOfLines={1}>
+            +{state.floorWidth} new equipment slots · floor {state.floors + 1}
+          </Text>
+        </View>
+        <View style={styles.rowBuy}>
+          {state.floors >= BUILDING.maxFloors ? (
+            <Text variant="micro" color={palette.textFaint}>MAX</Text>
+          ) : (
+            <Button
+              label={formatMoney(fCost)}
+              size="sm"
+              variant={canFloor ? 'primary' : 'secondary'}
+              disabled={!canFloor}
+              onPress={onBuyFloor}
+              haptic="press"
+            />
+          )}
+        </View>
+      </Card>
+
+      <Card variant="glass" padding={spacing.md} style={styles.row}>
+        <View style={[styles.rowIcon, { backgroundColor: 'rgba(127,216,160,0.1)' }]}>
+          <Text size={20}>➡️</Text>
+        </View>
+        <View style={styles.rowBody}>
+          <View style={styles.rowTitleLine}>
+            <Text variant="subheading">Add Room</Text>
+            <Text variant="caption" color={palette.mint} numeric>
+              {state.floorWidth}/{BUILDING.maxWidth} wide
+            </Text>
+          </View>
+          <Text variant="caption" muted numberOfLines={1}>
+            Widen every floor by +1 equipment slot
+          </Text>
+        </View>
+        <View style={styles.rowBuy}>
+          {state.floorWidth >= BUILDING.maxWidth ? (
+            <Text variant="micro" color={palette.textFaint}>MAX</Text>
+          ) : (
+            <Button
+              label={formatMoney(rCost)}
+              size="sm"
+              variant={canRoom ? 'primary' : 'secondary'}
+              disabled={!canRoom}
+              onPress={onBuyRoom}
+              haptic="press"
+            />
+          )}
+        </View>
+      </Card>
+
+      <View style={styles.divider} />
+
+      {/* Equipment */}
+      <Text variant="micro" color={palette.gold} style={styles.sectionLabel}>
+        ☕ EQUIPMENT & STAFF
+      </Text>
+
       {GENERATORS.map((def) => {
         const owned = state.generators[def.id];
         const unlocked = generatorUnlocked(state, def.id);
         const cost = costOf(def, owned);
         const affordable = state.cash >= cost;
-        const each = def.baseCps * d.cpsMult * d.prestigeMult;
+        const incomeEach = generatorIncomePreview(state, def.id);
+        const totalIncome = incomeEach * owned;
+        const payback = incomeEach > 0 ? cost / incomeEach : Infinity;
+
         return (
           <Card key={def.id} variant="glass" padding={spacing.md} style={styles.row}>
             <View style={styles.rowIcon}>
-              <GeneratorIcon
-                id={def.id}
-                size={38}
-                color={unlocked ? (def.id === 'robo' ? palette.mint : palette.violet) : palette.textFaint}
-              />
+              <Text size={20}>{def.glyph}</Text>
+              {owned > 0 && (
+                <View style={styles.ownedBadge}>
+                  <Text variant="micro" color={palette.gold} numeric>{owned}</Text>
+                </View>
+              )}
             </View>
             <View style={styles.rowBody}>
               <View style={styles.rowTitleLine}>
                 <Text variant="subheading" numberOfLines={1} style={unlocked ? undefined : styles.lockedText}>
                   {def.name}
                 </Text>
-                {owned > 0 ? (
-                  <Text variant="caption" numeric muted>
-                    ×{owned}
-                  </Text>
-                ) : null}
               </View>
               <Text variant="caption" muted numberOfLines={1}>
-                {unlocked ? `${def.tagline} · +${formatMoney(each)}/s each` : `Needs a ${def.unlockRequires ? capitalize(GENERATORS.find((g) => g.id === def.unlockRequires)?.name ?? def.unlockRequires) : ''}`}
+                {unlocked ? def.tagline : `Needs ${def.unlockRequires ?? ''}`}
               </Text>
+              {/* Income preview */}
+              {unlocked && (
+                <View style={styles.incomeLine}>
+                  <Text variant="micro" color={palette.mint} numeric>
+                    +{formatMoney(incomeEach)}/s each
+                  </Text>
+                  {owned > 0 && (
+                    <Text variant="micro" color={palette.textFaint} numeric>
+                      · total {formatMoney(totalIncome)}/s
+                    </Text>
+                  )}
+                  {payback < Infinity && payback > 0 && (
+                    <Text variant="micro" color={palette.textFaint}>
+                      · payback {formatDuration(payback)}
+                    </Text>
+                  )}
+                </View>
+              )}
             </View>
             <View style={styles.rowBuy}>
               {unlocked ? (
@@ -69,16 +177,15 @@ export const ShopPanel = memo(function ShopPanel({
                   haptic="press"
                 />
               ) : (
-                <Text variant="micro" faint>
-                  LOCKED
-                </Text>
+                <Text variant="micro" faint>LOCKED</Text>
               )}
             </View>
           </Card>
         );
       })}
+
       <Text variant="caption" faint center style={styles.footNote}>
-        Every unit adds to your income per second — even while you're away.
+        Equipment earns while you're away — {formatMoney(d.cps)}/s total
       </Text>
     </ScrollView>
   );
@@ -93,14 +200,18 @@ export const UpgradesPanel = memo(function UpgradesPanel({
   state: GameState;
   onBuy: (id: string) => void;
 }) {
+  const d = derive(state);
+
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.panelPad}>
       {UPGRADES.map((u) => {
         const owned = state.upgrades.includes(u.id);
         const unlocked = upgradeUnlocked(state, u.id);
         const affordable = state.cash >= u.cost;
+        const cpsBoost = upgradeIncomePreview(state, u.id);
         const multLabel = u.tapMult ? `tap ×${u.tapMult}` : u.cpsMult ? `income ×${u.cpsMult}` : '';
         const reqGen = u.requires ? GENERATORS.find((g) => g.id === u.requires!.gen) : undefined;
+
         return (
           <Card key={u.id} variant="glass" padding={spacing.md} style={[styles.row, owned && styles.rowOwned]}>
             <View style={[styles.rowIcon, styles.upgradeIcon]}>
@@ -124,12 +235,15 @@ export const UpgradesPanel = memo(function UpgradesPanel({
                     ? `Needs ${u.requires.count}× ${reqGen?.name}`
                     : u.tagline}
               </Text>
+              {!owned && cpsBoost > 0 && (
+                <Text variant="micro" color={palette.mint} numeric>
+                  +{formatMoney(cpsBoost * d.totalGenerators)}/s total boost
+                </Text>
+              )}
             </View>
             <View style={styles.rowBuy}>
               {owned ? (
-                <Text variant="micro" color={palette.mint}>
-                  OWNED
-                </Text>
+                <Text variant="micro" color={palette.mint}>OWNED</Text>
               ) : unlocked ? (
                 <Button
                   label={formatMoney(u.cost)}
@@ -140,9 +254,7 @@ export const UpgradesPanel = memo(function UpgradesPanel({
                   haptic="press"
                 />
               ) : (
-                <Text variant="micro" faint>
-                  LOCKED
-                </Text>
+                <Text variant="micro" faint>LOCKED</Text>
               )}
             </View>
           </Card>
@@ -179,16 +291,12 @@ export const StatsPanel = memo(function StatsPanel({
         </Text>
         <Text variant="caption" muted style={{ marginTop: 4 }}>
           {gain > 0
-            ? `Reset the shop for ${gain} Cream Token${gain > 1 ? 's' : ''} (+${gain * 10}% permanent income each).`
+            ? `Reset for ${gain} Cream Token${gain > 1 ? 's' : ''} (+${gain * 10}% permanent income each).`
             : `Earn ${formatMoney(1_000_000)} in one run to open your second café.`}
         </Text>
         <View style={styles.prestigeStats}>
-          <Text variant="caption" muted>
-            Current bonus
-          </Text>
-          <Text variant="label" color={palette.gold} numeric>
-            +{bonusPct}%
-          </Text>
+          <Text variant="caption" muted>Current bonus</Text>
+          <Text variant="label" color={palette.gold} numeric>+{bonusPct}%</Text>
         </View>
         <Button
           label={gain > 0 ? 'Open Second Café' : 'Not yet'}
@@ -208,7 +316,9 @@ export const StatsPanel = memo(function StatsPanel({
         <Stat label="Income / sec" value={`${formatMoney(d.cps)}/s`} accent={palette.mint} />
         <Stat label="Tap power" value={formatMoney(d.tapPower)} accent={palette.gold} />
         <Stat label="Taps" value={formatNumber(state.taps)} />
-        <Stat label="Generators" value={formatNumber(d.totalGenerators)} />
+        <Stat label="Equipment" value={formatNumber(d.totalGenerators)} />
+        <Stat label="Floors" value={`${state.floors}/${BUILDING.maxFloors}`} accent={palette.cyan} />
+        <Stat label="Width" value={`${state.floorWidth}/${BUILDING.maxWidth}`} accent={palette.mint} />
         <Stat label="Prestiges" value={formatNumber(state.prestiges)} />
         <Stat label="Time played" value={formatDuration(state.playSeconds)} />
       </View>
@@ -225,8 +335,7 @@ export const StatsPanel = memo(function StatsPanel({
           <Card key={m.id} variant="glass" padding={spacing.md} style={styles.milestone}>
             <View style={styles.rowTitleLine}>
               <Text variant="label" numberOfLines={1} style={claimed ? styles.ownedText : undefined}>
-                {claimed ? '✓ ' : ''}
-                {m.name}
+                {claimed ? '✓ ' : ''}{m.name}
               </Text>
               <Text variant="caption" color={claimable ? palette.gold : palette.textMuted} numeric>
                 {claimable ? formatMoney(m.reward) : `${formatNumber(Math.min(progress, m.target))}/${formatNumber(m.target)}`}
@@ -246,9 +355,7 @@ export const StatsPanel = memo(function StatsPanel({
               {claimable ? (
                 <Button label="Claim" size="sm" variant="success" onPress={() => onClaimMilestone(m.id)} style={{ minWidth: 76 }} />
               ) : claimed ? (
-                <Text variant="micro" color={palette.mint}>
-                  DONE
-                </Text>
+                <Text variant="micro" color={palette.mint}>DONE</Text>
               ) : null}
             </View>
           </Card>
@@ -263,22 +370,16 @@ export const StatsPanel = memo(function StatsPanel({
 const Stat = memo(function Stat({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
     <View style={styles.statCell}>
-      <Text variant="caption" muted numberOfLines={1}>
-        {label}
-      </Text>
-      <Text variant="label" numeric color={accent ?? palette.text} numberOfLines={1}>
-        {value}
-      </Text>
+      <Text variant="caption" muted numberOfLines={1}>{label}</Text>
+      <Text variant="label" numeric color={accent ?? palette.text} numberOfLines={1}>{value}</Text>
     </View>
   );
 });
 
-function capitalize(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
 const styles = StyleSheet.create({
   panelPad: { padding: spacing.md, gap: spacing.sm, paddingBottom: spacing.xxl },
+  sectionLabel: { marginBottom: spacing.xs, letterSpacing: 1 },
+  divider: { height: 1, backgroundColor: palette.hairline, marginVertical: spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   rowOwned: { opacity: 0.75 },
   rowIcon: {
@@ -292,11 +393,23 @@ const styles = StyleSheet.create({
     borderColor: palette.hairline,
   },
   upgradeIcon: { backgroundColor: 'rgba(255,217,138,0.08)' },
+  ownedBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: palette.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   rowBody: { flex: 1, gap: 2 },
   rowTitleLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   rowBuy: { alignItems: 'flex-end' },
   lockedText: { color: palette.textFaint },
   ownedText: { color: palette.mint },
+  incomeLine: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap', marginTop: 2 },
   footNote: { marginTop: spacing.md, textAlign: 'center' },
   prestigeCard: { borderWidth: 1, borderColor: 'rgba(255,217,138,0.25)' },
   prestigeStats: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.md },

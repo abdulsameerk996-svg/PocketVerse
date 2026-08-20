@@ -1,15 +1,15 @@
-import { BALANCE, GENERATOR_MAP, GENERATORS, MILESTONE_MAP, MILESTONES, UPGRADE_MAP, UPGRADES } from './data';
+import { BALANCE, BUILDING, GENERATOR_MAP, GENERATORS, MILESTONE_MAP, MILESTONES, UPGRADE_MAP, UPGRADES } from './data';
 import type { DerivedStats, GameState, GeneratorId } from './types';
 
 /**
- * Donut Tycoon engine — pure and deterministic.
+ * Café Tycoon engine — pure and deterministic.
  *
  * Every transition takes a state and returns a new state. No React, no
  * platform APIs, no timers. `tools/tycoon-sim` plays this same code headlessly
  * and the app drives it from the store.
  */
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export function createGame(now = Date.now()): GameState {
   return {
@@ -35,6 +35,8 @@ export function createGame(now = Date.now()): GameState {
     playSeconds: 0,
     lastSeenAt: now,
     startedAt: now,
+    floors: 1,
+    floorWidth: BUILDING.startingWidth,
   };
 }
 
@@ -136,6 +138,14 @@ export function buyGenerator(state: GameState, id: GeneratorId): GameState | nul
   };
 }
 
+/** Preview: what would buying this generator add to CPS? */
+export function generatorIncomePreview(state: GameState, id: GeneratorId): number {
+  const def = GENERATOR_MAP[id];
+  if (!def) return 0;
+  const { cpsMult, prestigeMult } = derive(state);
+  return finite(def.baseCps) * cpsMult * prestigeMult;
+}
+
 export function upgradeUnlocked(state: GameState, id: string): boolean {
   const u = UPGRADE_MAP[id];
   if (!u) return false;
@@ -154,6 +164,85 @@ export function buyUpgrade(state: GameState, id: string): GameState | null {
     lastSeenAt: Date.now(),
   };
 }
+
+/** Preview: what is the CPS multiplier this upgrade would grant? */
+export function upgradeIncomePreview(state: GameState, id: string): number {
+  const u = UPGRADE_MAP[id];
+  if (!u || state.upgrades.includes(id)) return 0;
+  if (u.tapMult) return 0; // tap-only upgrades don't affect CPS
+  return u.cpsMult ?? 1;
+}
+
+/* ---------- BUILDING / TOWER EXPANSION ---------- */
+
+/** Cost to add the next floor. */
+export function floorCost(state: GameState): number {
+  return finite(BUILDING.baseFloorCost) * Math.pow(BUILDING.floorCostGrowth, state.floors - 1);
+}
+
+/** Cost to widen the next room. */
+export function roomCost(state: GameState): number {
+  return finite(BUILDING.baseRoomCost) * Math.pow(BUILDING.roomCostGrowth, state.floorWidth - BUILDING.startingWidth);
+}
+
+export function canBuyFloor(state: GameState): boolean {
+  return state.floors < BUILDING.maxFloors && state.cash >= floorCost(state);
+}
+
+export function canBuyRoom(state: GameState): boolean {
+  return state.floorWidth < BUILDING.maxWidth && state.cash >= roomCost(state);
+}
+
+export function buyFloor(state: GameState): GameState | null {
+  const cost = floorCost(state);
+  if (state.floors >= BUILDING.maxFloors || state.cash < cost) return null;
+  return {
+    ...state,
+    cash: state.cash - cost,
+    floors: state.floors + 1,
+    lastSeenAt: Date.now(),
+  };
+}
+
+export function buyRoom(state: GameState): GameState | null {
+  const cost = roomCost(state);
+  if (state.floorWidth >= BUILDING.maxWidth || state.cash < cost) return null;
+  return {
+    ...state,
+    cash: state.cash - cost,
+    floorWidth: state.floorWidth + 1,
+    lastSeenAt: Date.now(),
+  };
+}
+
+/**
+ * Given the current game state, return a flat list of (generatorId, floor, slot)
+ * assignments. Equipment fills floor 1 first, then floor 2, etc.
+ */
+export function slotAssignments(state: GameState): { id: GeneratorId; floor: number; slot: number }[] {
+  const result: { id: GeneratorId; floor: number; slot: number }[] = [];
+  let idx = 0;
+  const w = Math.max(1, Math.floor(state.floorWidth));
+  for (const def of GENERATORS) {
+    const owned = state.generators[def.id] ?? 0;
+    for (let i = 0; i < owned; i++) {
+      const floor = Math.floor(idx / w);
+      const slot = idx % w;
+      result.push({ id: def.id, floor, slot });
+      idx++;
+    }
+  }
+  return result;
+}
+
+/** How many floors are needed to hold all current equipment? */
+export function occupiedFloors(state: GameState): number {
+  const total = Object.values(state.generators).reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0);
+  if (total === 0) return 1;
+  return Math.min(BUILDING.maxFloors, Math.ceil(total / Math.max(1, state.floorWidth)));
+}
+
+/* ---------- MILESTONES ---------- */
 
 export function milestoneProgress(state: GameState, id: string): number {
   const m = MILESTONE_MAP[id];
@@ -192,6 +281,8 @@ export function claimMilestone(state: GameState, id: string): GameState | null {
   };
 }
 
+/* ---------- PRESTIGE ---------- */
+
 /** Prestige tokens the current run would yield: sqrt(lifetime / divisor). */
 export function prestigeGain(state: GameState): number {
   if (state.lifetimeEarned < BALANCE.prestigeDivisor) return 0;
@@ -215,6 +306,8 @@ export function doPrestige(state: GameState, now = Date.now()): GameState {
     lastSeenAt: now,
   };
 }
+
+/* ---------- OFFLINE ---------- */
 
 /**
  * Offline earnings since `state.lastSeenAt`. 50% of live cps, capped at 8h,
@@ -245,14 +338,16 @@ export function applyOffline(state: GameState, now = Date.now()): { state: GameS
   };
 }
 
-/** Guard: coerce NaN/Infinity/undefined to a sane default so a poisoned value can never propagate. */
+/* ---------- HELPERS ---------- */
+
+/** Guard: coerce NaN/Infinity/undefined to a sane default. */
 function finite(n: unknown, fallback = 0): number {
   return typeof n === 'number' && Number.isFinite(n) ? n : fallback;
 }
 
 /**
- * Sanitise a loaded save: guarantee finite numbers, complete generator map and
- * valid id lists. Never throws — a corrupt save becomes a fresh one.
+ * Sanitise a loaded save: guarantee finite numbers, complete generator map
+ * and valid id lists. Never throws — a corrupt save becomes a fresh one.
  */
 export function validateState(raw: unknown): GameState {
   const fresh = createGame();
@@ -272,6 +367,11 @@ export function validateState(raw: unknown): GameState {
     ? s.milestonesClaimed.filter((m) => typeof m === 'string' && !!MILESTONE_MAP[m])
     : [];
 
+  const floors = typeof s.floors === 'number' && s.floors >= 1 && s.floors <= BUILDING.maxFloors
+    ? Math.floor(s.floors) : 1;
+  const floorWidth = typeof s.floorWidth === 'number' && s.floorWidth >= BUILDING.startingWidth && s.floorWidth <= BUILDING.maxWidth
+    ? Math.floor(s.floorWidth) : BUILDING.startingWidth;
+
   return {
     version: SAVE_VERSION,
     cash: finite(s.cash),
@@ -286,5 +386,7 @@ export function validateState(raw: unknown): GameState {
     playSeconds: Math.max(0, finite(s.playSeconds)),
     lastSeenAt: typeof s.lastSeenAt === 'number' && Number.isFinite(s.lastSeenAt) ? s.lastSeenAt : Date.now(),
     startedAt: typeof s.startedAt === 'number' && Number.isFinite(s.startedAt) ? s.startedAt : Date.now(),
+    floors,
+    floorWidth,
   };
 }

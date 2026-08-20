@@ -5,6 +5,8 @@ import {
   applyOffline,
   buyGenerator as engineBuyGenerator,
   buyUpgrade as engineBuyUpgrade,
+  buyFloor as engineBuyFloor,
+  buyRoom as engineBuyRoom,
   claimMilestone as engineClaimMilestone,
   createGame,
   doPrestige,
@@ -13,6 +15,8 @@ import {
   validateState,
 } from './engine';
 import { loadSaveBlob, parseBlob, persistSaveBlob, wipeSave } from './save';
+import { buildWorld, createWorld } from './world';
+import type { WorldState } from './world';
 
 export type TycoonSettings = { sound: boolean; haptics: boolean };
 
@@ -24,13 +28,18 @@ type TycoonState = {
   /** Offline seconds awaited (shown in the welcome-back modal). */
   offlineSeconds: number;
   settings: TycoonSettings;
+  /** Visual world state (characters, floaters). */
+  world: WorldState;
 
   hydrate: () => Promise<void>;
   collectOffline: () => void;
   tap: () => void;
   advance: (seconds: number) => void;
+  tickWorld: (dt: number) => void;
   buyGenerator: (id: GeneratorId) => boolean;
   buyUpgrade: (id: string) => boolean;
+  buyFloor: () => boolean;
+  buyRoom: () => boolean;
   claimMilestone: (id: string) => boolean;
   prestige: () => void;
   setSetting: (key: keyof TycoonSettings, value: boolean) => void;
@@ -46,6 +55,7 @@ export const useTycoon = create<TycoonState>((set, get) => ({
   offlineGain: 0,
   offlineSeconds: 0,
   settings: { sound: true, haptics: true },
+  world: createWorld(),
 
   hydrate: async () => {
     const blob = parseBlob(await loadSaveBlob());
@@ -75,6 +85,12 @@ export const useTycoon = create<TycoonState>((set, get) => ({
     if (earned > 0) set({ state });
   },
 
+  tickWorld: (dt) => {
+    const { state, world } = get();
+    const next = buildWorld(state, world, dt, Date.now());
+    set({ world: next });
+  },
+
   buyGenerator: (id) => {
     const next = engineBuyGenerator(get().state, id);
     if (!next) return false;
@@ -85,6 +101,22 @@ export const useTycoon = create<TycoonState>((set, get) => ({
 
   buyUpgrade: (id) => {
     const next = engineBuyUpgrade(get().state, id);
+    if (!next) return false;
+    set({ state: next });
+    void get().saveNow();
+    return true;
+  },
+
+  buyFloor: () => {
+    const next = engineBuyFloor(get().state);
+    if (!next) return false;
+    set({ state: next });
+    void get().saveNow();
+    return true;
+  },
+
+  buyRoom: () => {
+    const next = engineBuyRoom(get().state);
     if (!next) return false;
     set({ state: next });
     void get().saveNow();
@@ -102,7 +134,7 @@ export const useTycoon = create<TycoonState>((set, get) => ({
   prestige: () => {
     const { state } = get();
     if (prestigeGain(state) <= 0) return;
-    set({ state: doPrestige(state) });
+    set({ state: doPrestige(state), world: createWorld() });
     void get().saveNow();
   },
 
@@ -114,7 +146,7 @@ export const useTycoon = create<TycoonState>((set, get) => ({
   reset: async () => {
     await wipeSave();
     const fresh = validateState(null);
-    set({ state: fresh, offlineGain: 0, offlineSeconds: 0, settings: { sound: true, haptics: true } });
+    set({ state: fresh, offlineGain: 0, offlineSeconds: 0, world: createWorld(), settings: { sound: true, haptics: true } });
     await persistSaveBlob({
       version: fresh.version,
       settings: { sound: true, haptics: true },
@@ -127,7 +159,6 @@ export const useTycoon = create<TycoonState>((set, get) => ({
       clearTimeout(saveTimer);
       saveTimer = null;
     }
-    // Debounce hot bursts (rapid tapping) — writes are cheap but no need to spam.
     saveTimer = setTimeout(() => {
       const { state, settings } = get();
       void persistSaveBlob({ version: state.version, settings, state });
